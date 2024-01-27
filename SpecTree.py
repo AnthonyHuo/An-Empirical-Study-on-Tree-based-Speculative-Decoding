@@ -92,7 +92,10 @@ class SpecTree(Tree):
         assert len(set(idx_list)) == len(idx_list)
         assert len(self.draft_logits) == (self.num_nodes - self.ground_truth_len + 1)
         
-        
+        if benchmark:
+                torch.cuda.synchronize()
+                t1 = time.time()
+        total_branch = sum(n_branch_list)
         max_branch = max(n_branch_list)
         sampling_logits = self.draft_logits[idx_list]
         
@@ -103,10 +106,7 @@ class SpecTree(Tree):
         new_tokens_set  = (self.rand[idx_list].log()/sampling_q).topk(k=max_branch).indices
         
             
-        if benchmark:
-                torch.cuda.synchronize()
-                t1 = time.time()
-        total_branch = sum(n_branch_list)
+        
         finished_tokens = 0
             
         for i, idx in enumerate(idx_list):
