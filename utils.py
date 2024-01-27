@@ -2,9 +2,10 @@ import torch
 import dataclasses
 import math
 from copy import deepcopy
+from torch.nn.functional import relu
 def get_residual(p: torch.Tensor, q:torch.Tensor):
     residual = p - q
-    residual[residual < 0] = 0.0
+    residual.relu_()
     residual = residual / (residual.sum(dim=-1).unsqueeze(-1) + 1e-9)
     return residual
 

@@ -8,7 +8,7 @@ import time
 from utils import _make_causal_mask
 class Tree:
     def __init__(self, device :str = 'cpu', max_length = 512, dtype = torch.float16) -> None:
-        self.tokens :torch.LongTensor = None
+        self.tokens = torch.zeros(max_length, device=device).long()
         self.Successors :list[list[int]] = []
         self.num_nodes = 0
         self.device = device
@@ -27,7 +27,7 @@ class Tree:
         assert self.attn_mask.shape[1] == self.max_length
 
     def set_prefix(self, prefix: torch.LongTensor):
-        self.tokens = prefix.to(self.device)
+        self.tokens[:len(prefix)] = prefix.to(self.device)
         self.position_ids[:len(prefix)] = torch.arange(len(prefix))
         
         self.num_nodes = len(prefix)
@@ -36,7 +36,7 @@ class Tree:
         
         
 
-    def collective_expand_position(self, parents :torch.LongTensor, expand_tokens :torch.LongTensor):
+    def collective_expand_position(self, expand_tokens :torch.LongTensor):
         self.tokens = torch.cat([self.tokens, expand_tokens], dim=-1)
         
 

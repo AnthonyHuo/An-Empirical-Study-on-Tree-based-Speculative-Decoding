@@ -58,26 +58,25 @@ class SpecTree(Tree):
         
         
         if draft_kv_len == 0:
-            draft_model_outputs = self.draft_model_engine.inference(input_ids=self.tokens.unsqueeze(0), 
-                                storage_ids=self.storage_ids[:len(self.tokens)], 
-                                position_ids=self.position_ids[:len(self.tokens)].unsqueeze(0),
-                                attn_mask=self.attn_mask[:len(self.tokens)][None, None, :, :])
+            draft_model_outputs = self.draft_model_engine.inference(input_ids=self.tokens[:self.num_nodes].unsqueeze(0), 
+                                storage_ids=self.storage_ids[:self.num_nodes], 
+                                position_ids=self.position_ids[:self.num_nodes].unsqueeze(0),
+                                attn_mask=self.attn_mask[:self.num_nodes][None, None, :, :])
             self.draft_logits :torch.FloatTensor= draft_model_outputs[...,-1,:]
         
         else:
-            assert draft_kv_len == (len(self.tokens) - 1)
-            draft_model_outputs = self.draft_model_engine.inference(input_ids = self.tokens[draft_kv_len:].unsqueeze(0), 
-                                                    storage_ids=self.storage_ids[draft_kv_len: len(self.tokens)],
-                                                    position_ids=self.position_ids[draft_kv_len: len(self.tokens)].unsqueeze(0),
-                                                    attn_mask=self.attn_mask[draft_kv_len:len(self.tokens)][None, None, :, :])
+            draft_model_outputs = self.draft_model_engine.inference(input_ids = self.tokens[draft_kv_len: self.num_nodes].unsqueeze(0), 
+                                                    storage_ids=self.storage_ids[draft_kv_len: self.num_nodes],
+                                                    position_ids=self.position_ids[draft_kv_len: self.num_nodes].unsqueeze(0),
+                                                    attn_mask=self.attn_mask[draft_kv_len: self.num_nodes][None, None, :, :])
             self.draft_logits :torch.FloatTensor = draft_model_outputs[...,-1,:]
-        self.draft_kv_len = len(self.tokens)
+        self.draft_kv_len = self.num_nodes
         
         self.target_kv_len = target_kv_len
         self.target_kv = target_kv
         if self.target_kv is not None:
             assert self.target_kv[0][0].shape[-2] == self.target_kv_len
-            assert self.target_kv_len == (len(self.tokens) - 1)
+            assert self.target_kv_len == (self.num_nodes - 1)
         else:
             assert self.target_kv_len == 0
         self.rand = torch.empty((self.tree_size, self.draft_logits.shape[1])).uniform_().to(self.device)
@@ -93,48 +92,49 @@ class SpecTree(Tree):
         assert len(set(idx_list)) == len(idx_list)
         assert len(self.draft_logits) == (self.num_nodes - self.ground_truth_len + 1)
         
-        if benchmark:
-                torch.cuda.synchronize()
-                t1 = time.time()
         
-        sampling_logits = self.draft_logits[idx_list]
-        sampling_q = softmax(sampling_logits / self.temperature, dim=-1)
         max_branch = max(n_branch_list)
+        sampling_logits = self.draft_logits[idx_list]
+        
+        sampling_q = softmax(sampling_logits / self.temperature, dim=-1)
+        
             
             
         new_tokens_set  = (self.rand[idx_list].log()/sampling_q).topk(k=max_branch).indices
+        
             
-            
+        if benchmark:
+                torch.cuda.synchronize()
+                t1 = time.time()
         total_branch = sum(n_branch_list)
         finished_tokens = 0
             
         for i, idx in enumerate(idx_list):
                 n_branch = n_branch_list[i]
-                self.new_tokens_buffer[finished_tokens: finished_tokens + n_branch] = new_tokens_set[i][:n_branch]
+                self.tokens[self.num_nodes + finished_tokens: self.num_nodes + finished_tokens + n_branch]  = new_tokens_set[i][:n_branch]
                 finished_tokens += n_branch
             
-            
-        self.num_nodes = self.num_nodes + total_branch
-        self.collective_expand_position(self.parents_buffer[:finished_tokens], self.new_tokens_buffer[:finished_tokens])
-        
-
         if benchmark:
                     torch.cuda.synchronize()
                     t2 = time.time()
                     x1 += (t2 - t1)
+        self.num_nodes = self.num_nodes + total_branch
+        
+
+        
         start_pos = self.num_nodes - total_branch
         end_pos = self.num_nodes
         attn_mask = self.attn_mask[self.num_nodes - total_branch: self.num_nodes]
         attn_mask = attn_mask[None, None, :, :]
         
         draft_model_outputs = self.draft_model_engine.graph_inference(
-            input_ids = self.tokens[self.draft_kv_len:].unsqueeze(0),
+            input_ids = self.tokens[self.draft_kv_len: self.num_nodes].unsqueeze(0),
             position_ids = self.position_ids[start_pos : end_pos].unsqueeze(0),
             attn_mask = attn_mask,
-            storage_ids=self.storage_ids[self.draft_kv_len: len(self.tokens)]
+            storage_ids=self.storage_ids[self.draft_kv_len: self.num_nodes]
             
         )
-        self.draft_kv_len = len(self.tokens)
+        self.draft_kv_len = self.num_nodes
         self.draft_logits = torch.cat([self.draft_logits, draft_model_outputs[0][-total_branch:]], dim=0)
         assert len(self.draft_logits) == (self.num_nodes - self.ground_truth_len + 1)
         if benchmark:
@@ -180,7 +180,7 @@ class SpecTree(Tree):
             if benchmark:
                 torch.cuda.synchronize()
                 t1 = time.time()
-            target_model_outputs = self.target_model(input_ids = self.tokens.unsqueeze(0), 
+            target_model_outputs = self.target_model(input_ids = self.tokens[start_pos : end_pos].unsqueeze(0), 
                                     use_cache=True, position_ids = self.position_ids[start_pos : end_pos].unsqueeze(0), attention_mask = attn_mask)
             if benchmark:
                 torch.cuda.synchronize()
@@ -197,7 +197,7 @@ class SpecTree(Tree):
             if benchmark:
                 torch.cuda.synchronize()
                 t1 = time.time()
-            target_model_outputs = self.target_model(input_ids = self.tokens[self.target_kv_len:].unsqueeze(0), 
+            target_model_outputs = self.target_model(input_ids = self.tokens[self.target_kv_len: self.num_nodes].unsqueeze(0), 
                                         use_cache=True,past_key_values=self.target_kv, 
                                         position_ids =self.position_ids[start_pos : end_pos].unsqueeze(0), attention_mask = attn_mask)
             
@@ -230,8 +230,8 @@ class SpecTree(Tree):
 
         accept_tokens = self.tokens[accept_list]
         valid_tokens = torch.cat([accept_tokens, last_token], dim=-1)
-        
         self.draft_model_engine.gather_kv(accept_list)
+        
         target_kv = select_kv(self.target_kv, accept_list)
         if benchmark:
             torch.cuda.synchronize()
