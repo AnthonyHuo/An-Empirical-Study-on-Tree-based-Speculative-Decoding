@@ -9,6 +9,7 @@ from Tree import Tree
 import time
 import deepspeed
 from Engine import GraphInferenceEngine
+from torch.profiler import profile, record_function, ProfilerActivity
 from utils import get_sampling_logits, make_tree_attention_mask, select_kv, ChildrenAccept, get_residual, cat_kv
 class SpecTree(Tree):
     def __init__(self, 
@@ -95,26 +96,31 @@ class SpecTree(Tree):
         if benchmark:
                 torch.cuda.synchronize()
                 t1 = time.time()
-        sampling_logits = self.draft_logits[idx_list]
-        sampling_q = softmax(sampling_logits / self.temperature, dim=-1)
-        max_branch = max(n_branch_list)
-        
-        
-        new_tokens_set  = (self.rand[idx_list].log()/sampling_q).topk(k=max_branch).indices
-        
-        
-        
-        total_branch = sum(n_branch_list)
-        finished_tokens = 0
-        
-        for i, idx in enumerate(idx_list):
-            n_branch = n_branch_list[i]
-            self.new_tokens_buffer[finished_tokens: finished_tokens + n_branch] = new_tokens_set[i][:n_branch]
-            finished_tokens += n_branch
-        
-        
-        self.num_nodes = self.num_nodes + total_branch
-        self.collective_expand_position(self.parents_buffer[:finished_tokens], self.new_tokens_buffer[:finished_tokens])
+        with profile(activities=[
+            ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True) as prof:
+            sampling_logits = self.draft_logits[idx_list]
+            sampling_q = softmax(sampling_logits / self.temperature, dim=-1)
+            max_branch = max(n_branch_list)
+            
+            
+            new_tokens_set  = (self.rand[idx_list].log()/sampling_q).topk(k=max_branch).indices
+            
+            
+            
+            total_branch = sum(n_branch_list)
+            finished_tokens = 0
+            
+            for i, idx in enumerate(idx_list):
+                n_branch = n_branch_list[i]
+                self.new_tokens_buffer[finished_tokens: finished_tokens + n_branch] = new_tokens_set[i][:n_branch]
+                finished_tokens += n_branch
+            
+            
+            self.num_nodes = self.num_nodes + total_branch
+            self.collective_expand_position(self.parents_buffer[:finished_tokens], self.new_tokens_buffer[:finished_tokens])
+        if len(idx_list) >= 5:
+            print(prof.key_averages().table(sort_by="cuda_time_total"))
+            exit(0)
 
         if benchmark:
                     torch.cuda.synchronize()
