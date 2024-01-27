@@ -9,7 +9,7 @@ from Tree import Tree
 import time
 import deepspeed
 from Engine import GraphInferenceEngine
-from utils import get_sampling_logits, make_tree_attention_mask, select_kv, ChildrenAccept, get_residual, get_n_branch, assign_static_budget, cat_kv
+from utils import get_sampling_logits, make_tree_attention_mask, select_kv, ChildrenAccept, get_residual, cat_kv
 class SpecTree(Tree):
     def __init__(self, 
                  #draft_model :LlamaForCausalLM_Attn, 
