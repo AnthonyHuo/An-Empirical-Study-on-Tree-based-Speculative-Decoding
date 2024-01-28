@@ -57,13 +57,13 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngi
     branch_prob = torch.zeros(w + 1).to('cuda:0')
     with torch.no_grad():
         for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
-            input_ids = batch['input_ids'][..., :32]
-            labels = batch['labels'][..., :32]
+            input_ids = batch['input_ids'][..., :128]
+            labels = batch['labels'][..., :128]
             terminate = False
             if labels[0][-1] == -100: terminate = True
             draft_kv_len = 0
             target_kv_len = 0
-            while input_ids.shape[1] < 128 and terminate == False:
+            while input_ids.shape[1] < 256 and terminate == False:
                 attn_mask.fill_(torch.finfo(dtype).min)
                 active_mark.fill_(0)
                 spectree = SpecTreeTest(prefix=input_ids.squeeze(0), device='cuda:0', temperature=T,

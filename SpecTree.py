@@ -10,7 +10,7 @@ import time
 import deepspeed
 from Engine import GraphInferenceEngine, GraphInferenceEngineTG
 from torch.profiler import profile, record_function, ProfilerActivity
-from utils import get_sampling_logits, make_tree_attention_mask, select_kv, ChildrenAccept, get_residual, cat_kv
+from utils import get_sampling_logits, make_tree_attention_mask, select_kv, ChildrenAccept, get_residual, cat_kv, _make_causal_mask
 class SpecTree(Tree):
     def __init__(self, 
                  #draft_model :LlamaForCausalLM_Attn, 
@@ -23,15 +23,16 @@ class SpecTree(Tree):
                  target_kv_len = 0,
                  max_length = 256,
                  device :str = 'cpu',
+                 max_target_seq = 256,
                  grow_map = None,
                  attn_mask = None, 
                  sequence = None, 
                  new_tokens_buffer = None, 
                  parents_buffer = None, 
-                 position_ids = None, 
-                 active_mark = None) -> None:
+                 position_ids = None) -> None:
         super().__init__(device=device, max_length=max_length)
         assert self.max_length == draft_model_engine.engine.max_length
+        self.max_target_seq = max_target_seq
         #self.draft_model = draft_model.to(self.device).eval()
         self.draft_model_engine = draft_model_engine
         self.target_model_engine = target_model_engine
@@ -44,9 +45,10 @@ class SpecTree(Tree):
         tree_mask = (tree_mask == 0).type(self.dtype)
         
         tree_mask.masked_fill_(tree_mask > 0, torch.finfo(self.dtype).min)
-        self.initialize(attn_mask, sequence, new_tokens_buffer, parents_buffer, position_ids, active_mark)
+        self.initialize(attn_mask, sequence, new_tokens_buffer, parents_buffer, position_ids, None)
         self.set_prefix(prefix=prefix)
         self.tree_size = self.grow_map["size"]
+        self.tree_mask = tree_mask
         self.attn_mask[len(prefix) : len(prefix) + self.tree_size, : len(prefix)] = 0.0
         self.attn_mask[len(prefix) : len(prefix) + self.tree_size - 1, len(prefix) : len(prefix) + self.tree_size - 1] = tree_mask[1:, 1:]
         self.ground_truth_len = len(prefix)
@@ -54,7 +56,7 @@ class SpecTree(Tree):
         
         self.position_ids[len(prefix) : len(prefix) + self.tree_size - 1] = (self.grow_map["depth"][1:].to(self.device) + len(prefix) - 1)
         self.storage_ids = torch.arange(self.max_length).to(self.device)
-        
+        self.depth = self.grow_map["depth"][1:].to(self.device)
         
         if draft_kv_len == 0:
             draft_model_outputs = self.draft_model_engine.inference(input_ids=self.tokens[:self.num_nodes].unsqueeze(0), 
@@ -204,9 +206,7 @@ class SpecTree(Tree):
         self.target_logits = get_sampling_logits(logits=self.target_logits, top_p=self.top_p, T=self.temperature, replicate=False)
         self.target_logits = softmax(self.target_logits / self.temperature, dim=-1)
         accept_list = list(range(self.ground_truth_len))
-        if benchmark:
-                torch.cuda.synchronize()
-                t2 = time.time()
+        
         while True:
             parent_id = accept_list[-1]
             children_accept = self.accept_step(parent_id=parent_id)
@@ -225,10 +225,11 @@ class SpecTree(Tree):
         
         self.draft_model_engine.gather_kv(accept_list)
         self.target_model_engine.gather_kv(accept_list)
+        x = self.prepare_for_next_iter(accept_list, valid_tokens)
         if benchmark:
             torch.cuda.synchronize()
             t4 = time.time()
-            return valid_tokens, len(accept_list), len(accept_list), t2 - t1, t3-t2, t4-t3
+            return valid_tokens, len(accept_list), len(accept_list), t2 - t1, t3-t2, t4 - t3
         return valid_tokens, len(accept_list), len(accept_list)
     def verbose(self):
         super().verbose()
@@ -249,6 +250,35 @@ class SpecTree(Tree):
             return sample_time, compute_time
         else:
             return None
+    
+    def prepare_for_next_iter(self, accept_list: list[int], valid_tokens :torch.LongTensor):
+        if len(accept_list) + 1 > self.max_target_seq:
+              return 
+        self.tokens[:len(valid_tokens)] = valid_tokens
+        self.position_ids[:len(accept_list)] =  self.position_ids[accept_list]
+        self.position_ids[len(accept_list)] = len(accept_list) 
+        self.position_ids[len(valid_tokens) : len(valid_tokens) + self.tree_size - 1] = (self.depth + len(valid_tokens) - 1)
+        self.ground_truth_len = len(valid_tokens)
+        self.num_nodes = len(valid_tokens)
+        
+        self.attn_mask[:self.num_nodes, :self.num_nodes] = _make_causal_mask((1, self.num_nodes),dtype=self.dtype, device=self.device)
+        self.attn_mask[len(valid_tokens) : len(valid_tokens) + self.tree_size, : len(valid_tokens)] = 0.0
+        self.attn_mask[len(valid_tokens) : len(valid_tokens) + self.tree_size - 1, len(valid_tokens) : len(valid_tokens) + self.tree_size - 1] = self.tree_mask[1:, 1:]
+
+        
+        draft_model_outputs = self.draft_model_engine.graph_inference(input_ids = self.tokens[len(accept_list): self.num_nodes].unsqueeze(0), 
+                                                    storage_ids=self.storage_ids[len(accept_list): self.num_nodes],
+                                                    position_ids=self.position_ids[len(accept_list): self.num_nodes].unsqueeze(0),
+                                                    attn_mask=self.attn_mask[len(accept_list): self.num_nodes][None, None, :, :])
+        
+        self.draft_logits :torch.FloatTensor = draft_model_outputs[...,-1,:]
+
+        self.draft_kv_len = self.num_nodes
+        self.target_kv_len = len(accept_list)
+        
+
+
+        
 
 
 class SpecTreeTest(Tree):
@@ -267,8 +297,7 @@ class SpecTreeTest(Tree):
                  sequence = None, 
                  new_tokens_buffer = None, 
                  parents_buffer = None, 
-                 position_ids = None, 
-                 active_mark = None) -> None:
+                 position_ids = None) -> None:
         
         super().__init__(device=device, max_length=max_length)
         assert self.max_length == draft_model_engine.engine.max_length
@@ -278,7 +307,7 @@ class SpecTreeTest(Tree):
         self.temperature = temperature
         self.top_p = top_p
         
-        self.initialize(attn_mask, sequence, new_tokens_buffer, parents_buffer, position_ids, active_mark)
+        self.initialize(attn_mask, sequence, new_tokens_buffer, parents_buffer, position_ids, None)
         self.set_prefix(prefix=prefix)
         self.Successors = [list(range(1, self.max_width + 1))]
         self.Successors.extend([[] for _ in range(self.max_width)])

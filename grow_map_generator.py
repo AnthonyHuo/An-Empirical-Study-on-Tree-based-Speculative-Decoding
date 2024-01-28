@@ -1,7 +1,7 @@
 import torch
-m = 33
-l = 2
-b = m-1
+m = 16
+l = 16
+b = 1
 positions = [0]
 states = [(m,l,b)]
 active = [True]
@@ -17,6 +17,7 @@ while True:
     expand = []
     expand_branch = []
     for i, act in enumerate(active):
+
         if act: 
             if parents[i] != -1:
                 attention_mask[i] = attention_mask[parents[i]]
@@ -30,7 +31,10 @@ while True:
             Successors.extend([[] for _ in range(z)])
             parents.extend([i for _ in range(z)])
             depth.extend([depth[i] + 1 for _ in range(z)])
-            states.extend([(1, 1, 0) for _ in range(z)])
+            if x >= 3 and y >= 3:
+                states.extend([(x-1, y-1, z) for _ in range(z)])
+            else:
+                states.extend([(x-1, y-1, 0) for _ in range(z)])
             num_nodes = num_nodes + z
     if len(expand) == 0:
         break
@@ -51,6 +55,7 @@ grow_map = {
     "size": num_nodes
 }
 
-path = "./growmaps/68m_13b_32.pt"
-
+path = "./growmaps/68m_13b_16-chain.pt"
+print(parents)
+print(expand_lists)
 torch.save(grow_map, path)

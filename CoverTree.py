@@ -10,7 +10,7 @@ import time
 import deepspeed
 from Engine import GraphInferenceEngine, GraphInferenceEngineTG
 from torch.profiler import profile, record_function, ProfilerActivity
-from utils import get_sampling_logits, make_tree_attention_mask, select_kv, ChildrenAccept, get_residual, cat_kv
+from utils import get_sampling_logits, make_tree_attention_mask, select_kv, ChildrenAccept, get_residual, cat_kv, _make_causal_mask
 class CoverTree(Tree):
     def __init__(self, 
                  #draft_model :LlamaForCausalLM_Attn, 
@@ -22,16 +22,17 @@ class CoverTree(Tree):
                  draft_kv_len = 0,
                  target_kv_len = 0,
                  max_length = 256,
+                 max_target_seq = 256,
                  device :str = 'cpu',
                  grow_map = None,
                  attn_mask = None, 
                  sequence = None, 
                  new_tokens_buffer = None, 
                  parents_buffer = None, 
-                 position_ids = None, 
-                 active_mark = None) -> None:
+                 position_ids = None) -> None:
         super().__init__(device=device, max_length=max_length)
         assert self.max_length == draft_model_engine.engine.max_length
+        self.max_target_seq = max_target_seq
         self.draft_model_engine = draft_model_engine
         self.target_model_engine = target_model_engine
         self.temperature = temperature
@@ -43,9 +44,10 @@ class CoverTree(Tree):
         tree_mask = (tree_mask == 0).type(self.dtype)
         
         tree_mask.masked_fill_(tree_mask > 0, torch.finfo(self.dtype).min)
-        self.initialize(attn_mask, sequence, new_tokens_buffer, parents_buffer, position_ids, active_mark)
+        self.initialize(attn_mask, sequence, new_tokens_buffer, parents_buffer, position_ids, None)
         self.set_prefix(prefix=prefix)
         self.tree_size = self.grow_map["size"]
+        self.tree_mask = tree_mask
         self.attn_mask[len(prefix) : len(prefix) + self.tree_size, : len(prefix)] = 0.0
         self.attn_mask[len(prefix) : len(prefix) + self.tree_size - 1, len(prefix) : len(prefix) + self.tree_size - 1] = tree_mask[1:, 1:]
         self.ground_truth_len = len(prefix)
@@ -53,6 +55,7 @@ class CoverTree(Tree):
         
         self.position_ids[len(prefix) : len(prefix) + self.tree_size - 1] = (self.grow_map["depth"][1:].to(self.device) + len(prefix) - 1)
         self.storage_ids = torch.arange(self.max_length).to(self.device)
+        self.depth = self.grow_map["depth"][1:].to(self.device)
         
         
         if draft_kv_len == 0:
@@ -218,6 +221,8 @@ class CoverTree(Tree):
         
         self.draft_model_engine.gather_kv(accept_list)
         self.target_model_engine.gather_kv(accept_list)
+
+        self.prepare_for_next_iter(accept_list, valid_tokens)
         if benchmark:
             torch.cuda.synchronize()
             t4 = time.time()
@@ -242,6 +247,31 @@ class CoverTree(Tree):
             return sample_time, compute_time
         else:
             return None
+    def prepare_for_next_iter(self, accept_list: list[int], valid_tokens :torch.LongTensor):
+        if len(accept_list) + 1 > self.max_target_seq:
+              return 
+        self.tokens[:len(valid_tokens)] = valid_tokens
+        self.position_ids[:len(accept_list)] =  self.position_ids[accept_list]
+        self.position_ids[len(accept_list)] = len(accept_list) 
+        self.position_ids[len(valid_tokens) : len(valid_tokens) + self.tree_size - 1] = (self.depth + len(valid_tokens) - 1)
+        self.ground_truth_len = len(valid_tokens)
+        self.num_nodes = len(valid_tokens)
+        
+        self.attn_mask[:self.num_nodes, :self.num_nodes] = _make_causal_mask((1, self.num_nodes),dtype=self.dtype, device=self.device)
+        self.attn_mask[len(valid_tokens) : len(valid_tokens) + self.tree_size, : len(valid_tokens)] = 0.0
+        self.attn_mask[len(valid_tokens) : len(valid_tokens) + self.tree_size - 1, len(valid_tokens) : len(valid_tokens) + self.tree_size - 1] = self.tree_mask[1:, 1:]
+
+        
+        draft_model_outputs = self.draft_model_engine.graph_inference(input_ids = self.tokens[len(accept_list): self.num_nodes].unsqueeze(0), 
+                                                    storage_ids=self.storage_ids[len(accept_list): self.num_nodes],
+                                                    position_ids=self.position_ids[len(accept_list): self.num_nodes].unsqueeze(0),
+                                                    attn_mask=self.attn_mask[len(accept_list): self.num_nodes][None, None, :, :])
+        
+        self.draft_logits :torch.FloatTensor = draft_model_outputs[...,-1,:]
+
+        self.draft_kv_len = self.num_nodes
+        self.target_kv_len = len(accept_list)
+        
 
 
 
@@ -262,8 +292,7 @@ class CoverTreeTest(Tree):
                  sequence = None, 
                  new_tokens_buffer = None, 
                  parents_buffer = None, 
-                 position_ids = None, 
-                 active_mark = None) -> None:
+                 position_ids = None) -> None:
         super().__init__(device=device, max_length=max_length)
         assert self.max_length == draft_model_engine.engine.max_length
         self.draft_model_engine = draft_model_engine
@@ -272,7 +301,7 @@ class CoverTreeTest(Tree):
         self.top_p = top_p
         self.grow_map = grow_map
         self.max_width = max_width
-        self.initialize(attn_mask, sequence, new_tokens_buffer, parents_buffer, position_ids, active_mark)
+        self.initialize(attn_mask, sequence, new_tokens_buffer, parents_buffer, position_ids, None)
         self.set_prefix(prefix=prefix)
 
         self.Successors = [list(range(1, self.max_width + 1))]
