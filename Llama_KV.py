@@ -32,6 +32,8 @@ class KV_Cache:
             device=self.device,
             dtype=self.dtype
         )
+        self.num_layers = config.num_hidden_layers
+        self.kv_offset = 0
 
     def initialize_kv(self,
             k_cache :torch.Tensor,
@@ -40,6 +42,8 @@ class KV_Cache:
         
         self.k_cache[...,:kv_len,:] = k_cache[...,:kv_len,:]
         self.v_cache[...,:kv_len,:] = v_cache[...,:kv_len,:]
+
+        self.kv_offset = kv_len
         
         
     
@@ -50,6 +54,8 @@ class KV_Cache:
 
         self.k_cache[..., len(indices):, :] = 0.0
         self.v_cache[..., len(indices):, :] = 0.0
+
+        self.kv_offset = len(indices)
 
 
     
@@ -68,9 +74,20 @@ class KV_Cache:
         self.k_cache[layer_idx].index_copy_(dim=-2, index=storage_ids, source=new_k_cache)
         self.v_cache[layer_idx].index_copy_(dim=-2, index=storage_ids, source=new_v_cache)
 
+        if layer_idx == self.num_layers - 1:
+            self.kv_offset += input_length
         return self.k_cache[layer_idx], self.v_cache[layer_idx]
 
     def clear(self):
         self.k_cache.zero_()
         self.v_cache.zero_()
+        self.kv_offset = 0
+    
+    def get_usable_length(self, layer_idx:int, input_length :int):
+            if layer_idx == self.num_layers - 1:
+                return self.kv_offset
+            else:
+                return self.kv_offset + input_length
+
+    
         
