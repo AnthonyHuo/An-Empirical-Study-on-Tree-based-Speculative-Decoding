@@ -66,7 +66,7 @@ class ChildrenAccept:
     accept_mark :int = None
     token :int = None
     position :int = None
-    successor_order :int = None
+    successor_order :int = -1
     residual :torch.FloatTensor = None
 
 def _make_causal_mask(
