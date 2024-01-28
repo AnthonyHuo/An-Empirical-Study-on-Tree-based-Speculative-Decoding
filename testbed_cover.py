@@ -10,7 +10,7 @@ from accelerate import Accelerator
 import argparse
 from data_converter import convert_dataset
 import argparse
-from SpecTree import SpecTree
+from CoverTree import CoverTree
 from Llama import LlamaForCausalLM_Attn
 import time
 from time import sleep
@@ -20,7 +20,7 @@ from Engine import GraphInferenceEngine, GraphInferenceEngineTG
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', type=str, help='model')
 parser.add_argument('--target', type=str, help='target model')
-parser.add_argument('--dataset', type=str, default="dataset/c4_small.json", help='dataset path')
+parser.add_argument('--dataset', type=str, default="c4_small.json", help='dataset path')
 parser.add_argument('--start', type=int, default=0, help='start')
 parser.add_argument('--end', type=int, default=200, help='end')
 parser.add_argument('--T', type=float, default=0.6, help='temperature')
@@ -37,59 +37,6 @@ parser.add_argument('--static', action='store_true')
 parser.add_argument('--offloading', action='store_true')
 args = parser.parse_args()
 print(args)
-
-
-
-def simulation_greedy_with_tree_fast(target_model : LlamaForCausalLM_Attn, draft_model: LlamaForCausalLM_Attn, dataloader: DataLoader, T=0.6, top_p=0.9, draft_top_p=1.1, budget=32, w=4, decay=0.85, negative=False, static=False, max_length=512):
-    num_eval_steps = len(dataloader)
-    num_decoding_steps = 0
-    num_large_model_steps = 0
-    total_time = 0.0
-    dtype = torch.float16
-    attn_mask = torch.full((max_length, max_length), torch.finfo(dtype).min, dtype=dtype, device='cuda:0')
-    sequence = torch.tensor(list(range(max_length)), device='cuda:0').long().unsqueeze(-1)
-    new_tokens_buffer =  torch.zeros(max_length).long().to('cuda:0')
-    parents_buffer =  torch.zeros(max_length).long().to('cuda:0')
-    position_ids = torch.zeros(max_length).long().to('cuda:0')
-    active_mark = torch.zeros(max_length).bool().to('cuda:0')
-    path = "./growmaps/68m_7b.pt"
-
-    grow_map = torch.load(path)
-    with torch.no_grad():
-        for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
-            input_ids = batch['input_ids'][..., :128]
-            labels = batch['labels'][..., :128]
-            terminate = False
-            if labels[0][-1] == -100: terminate = True
-            draft_kv = None
-            target_kv = None
-            draft_kv_len = 0
-            target_kv_len = 0
-            torch.cuda.synchronize()
-            t1 = time.time()
-            while input_ids.shape[1] < 256 and terminate == False:
-                attn_mask.fill_(torch.finfo(dtype).min)
-                active_mark.fill_(0)
-                spectree = SpecTree(prefix=input_ids.squeeze(0), device='cuda:0', temperature=T,
-                                    top_p=top_p, draft_kv=draft_kv, target_kv=target_kv, 
-                                    draft_kv_len=draft_kv_len, target_kv_len=target_kv_len,
-                                    draft_model=draft_model, target_model=target_model, budget=budget, grow_map=grow_map,
-                                    attn_mask = attn_mask, sequence = sequence, new_tokens_buffer = new_tokens_buffer, parents_buffer = parents_buffer, position_ids = position_ids, active_mark = active_mark)
-                spectree.construct_greedy_fast()
-                valid_tokens, draft_kv, target_kv = spectree.verify()
-                draft_kv_len = draft_kv[0][0].shape[-2]
-                target_kv_len = target_kv[0][0].shape[-2]
-                num_decoding_steps += (valid_tokens.shape[0] - input_ids.shape[1])
-                num_large_model_steps += 1
-                input_ids = valid_tokens.unsqueeze(0)
-                if input_ids[0][-1] == 2: terminate = True
-            torch.cuda.synchronize()
-            t2 = time.time()
-            total_time += (t2 - t1)
-    print("total time :{:.5f}s, latency :{:.5f}s, decoding step: {}, large model step: {}".format(total_time, total_time / num_decoding_steps, num_decoding_steps, num_large_model_steps))
-    return num_decoding_steps / num_large_model_steps
-
-
 
 def simulation_baseline(target_model : LlamaForCausalLM_Attn, dataloader: DataLoader, T=0.6, top_p=0.9):
     num_eval_steps = len(dataloader)
@@ -125,6 +72,57 @@ def simulation_baseline(target_model : LlamaForCausalLM_Attn, dataloader: DataLo
             
     print("total time :{:.5f}s, latency :{:.5f}s, decoding step: {}".format(total_time, total_time / num_decoding_steps, num_decoding_steps))
     return num_decoding_steps
+def simulation_greedy_with_tree_fast(target_model : LlamaForCausalLM_Attn, draft_model: LlamaForCausalLM_Attn, dataloader: DataLoader, T=0.6, top_p=0.9, draft_top_p=1.1, budget=32, w=4, decay=0.85, negative=False, static=False, max_length=512):
+    num_eval_steps = len(dataloader)
+    num_decoding_steps = 0
+    num_large_model_steps = 0
+    total_time = 0.0
+    dtype = torch.float16
+    attn_mask = torch.full((max_length, max_length), torch.finfo(dtype).min, dtype=dtype, device='cuda:0')
+    sequence = torch.tensor(list(range(max_length)), device='cuda:0').long().unsqueeze(-1)
+    new_tokens_buffer =  torch.zeros(max_length).long().to('cuda:0')
+    parents_buffer =  torch.zeros(max_length).long().to('cuda:0')
+    position_ids = torch.zeros(max_length).long().to('cuda:0')
+    active_mark = torch.zeros(max_length).bool().to('cuda:0')
+    path = "./growmaps/68m_13b.pt"
+
+    grow_map = torch.load(path)
+    with torch.no_grad():
+        for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
+            input_ids = batch['input_ids'][..., :64]
+            labels = batch['labels'][..., :64]
+            terminate = False
+            if labels[0][-1] == -100: terminate = True
+            draft_kv = None
+            target_kv = None
+            draft_kv_len = 0
+            target_kv_len = 0
+            torch.cuda.synchronize()
+            t1 = time.time()
+            while input_ids.shape[1] < 96 and terminate == False:
+                attn_mask.fill_(torch.finfo(dtype).min)
+                active_mark.fill_(0)
+                spectree = CoverTree(prefix=input_ids.squeeze(0), device='cuda:0', temperature=T,
+                                    top_p=top_p, 
+                                    draft_kv_len=draft_kv_len, target_kv_len=target_kv_len,
+                                    draft_model_engine=draft_model, target_model_engine=target_model, 
+                                    max_length=max_length, grow_map=grow_map,
+                                    attn_mask = attn_mask, sequence = sequence, new_tokens_buffer = new_tokens_buffer, 
+                                    parents_buffer = parents_buffer, 
+                                    position_ids = position_ids, active_mark = active_mark)
+                spectree.construct_grow_map()
+                valid_tokens, draft_kv_len, target_kv_len= spectree.verify()
+                num_decoding_steps += (valid_tokens.shape[0] - input_ids.shape[1])
+                num_large_model_steps += 1
+                input_ids = valid_tokens.unsqueeze(0)
+                if input_ids[0][-1] == 2: terminate = True
+            draft_model.clear_kv()
+            target_model.clear_kv()
+            torch.cuda.synchronize()
+            t2 = time.time()
+            total_time += (t2 - t1)
+    print("total time :{:.5f}s, latency :{:.5f}s, decoding step: {}, large model step: {}".format(total_time, total_time / num_decoding_steps, num_decoding_steps, num_large_model_steps))
+    return num_decoding_steps / num_large_model_steps
 def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngineTG, draft_model: GraphInferenceEngine, dataloader: DataLoader, T=0.6, top_p=0.9, draft_top_p=1.1, budget=32, w=4, decay=0.85, negative=False, static=False, max_length=512):
     num_eval_steps = len(dataloader)
     num_decoding_steps = 0
@@ -144,7 +142,7 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngi
     parents_buffer =  torch.zeros(max_length).long().to('cuda:0')
     position_ids = torch.zeros(max_length).long().to('cuda:0')
     active_mark = torch.zeros(max_length).bool().to('cuda:0')
-    path = "./growmaps/68m_7b.pt"
+    path = "./growmaps/68m_13b.pt"
 
     grow_map = torch.load(path)
     with torch.no_grad():
@@ -155,15 +153,16 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngi
             if labels[0][-1] == -100: terminate = True
             draft_kv_len = 0
             target_kv_len = 0
-            while input_ids.shape[1] < 64 and terminate == False:
+            while input_ids.shape[1] < 128 and terminate == False:
                 torch.cuda.synchronize()
                 t1 = time.time()
                 attn_mask.fill_(torch.finfo(dtype).min)
                 active_mark.fill_(0)
-                spectree = SpecTree(prefix=input_ids.squeeze(0), device='cuda:0', temperature=T,
+                spectree = CoverTree(prefix=input_ids.squeeze(0), device='cuda:0', temperature=T,
                                     top_p=top_p, 
                                     draft_kv_len=draft_kv_len, target_kv_len=target_kv_len,
-                                    draft_model_engine=draft_model, target_model_engine=target_model, max_length=max_length, grow_map=grow_map,
+                                    draft_model_engine=draft_model, target_model_engine=target_model, 
+                                    max_length=max_length, grow_map=grow_map,
                                     attn_mask = attn_mask, sequence = sequence, new_tokens_buffer = new_tokens_buffer, 
                                     parents_buffer = parents_buffer, 
                                     position_ids = position_ids, active_mark = active_mark)
@@ -201,11 +200,7 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngi
 
 tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf", use_fast=False)
 tokenizer.pad_token = tokenizer.eos_token
-if "openwebtext" in args.dataset:
-    tokenized_dataset_eval = load_from_disk(args.dataset).select(list(range(args.start, args.end)))
-else:
-    tokenized_dataset_eval = convert_dataset(tokenizer=tokenizer,file_path=args.dataset).select(list(range(args.start, args.end)))
-
+tokenized_dataset_eval = convert_dataset(tokenizer=tokenizer,file_path=args.dataset).select(list(range(args.start, args.end)))
 data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
 dataloader = DataLoader(tokenized_dataset_eval, batch_size=1, collate_fn=data_collator)
 
@@ -229,3 +224,4 @@ elif args.Mode == 'baseline':
     simulation_baseline(target_model=target_model, dataloader=dataloader, T=args.T, top_p=args.P)
 elif args.Mode == 'greedy':
     simulation_greedy_with_tree_fast(target_model=target_model, draft_model=draft_model, dataloader=dataloader, T=args.T, top_p=args.P, budget=args.B, draft_top_p=args.DP, w=args.W, negative=args.negative, decay=args.decay, static=args.static, max_length=args.M)
+
