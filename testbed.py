@@ -16,7 +16,7 @@ import time
 from time import sleep
 from utils import get_sampling_logits
 import json
-from Engine import GraphInferenceEngine
+from Engine import GraphInferenceEngine, GraphInferenceEngineTG
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', type=str, help='model')
 parser.add_argument('--target', type=str, help='target model')
@@ -125,7 +125,7 @@ def simulation_baseline(target_model : LlamaForCausalLM_Attn, dataloader: DataLo
             
     print("total time :{:.5f}s, latency :{:.5f}s, decoding step: {}".format(total_time, total_time / num_decoding_steps, num_decoding_steps))
     return num_decoding_steps
-def simulation_greedy_with_tree_fast_benchmark(target_model : LlamaForCausalLM_Attn, draft_model: GraphInferenceEngine, dataloader: DataLoader, T=0.6, top_p=0.9, draft_top_p=1.1, budget=32, w=4, decay=0.85, negative=False, static=False):
+def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngineTG, draft_model: GraphInferenceEngine, dataloader: DataLoader, T=0.6, top_p=0.9, draft_top_p=1.1, budget=32, w=4, decay=0.85, negative=False, static=False):
     num_eval_steps = len(dataloader)
     num_decoding_steps = 0
     num_large_model_steps = 0
@@ -154,7 +154,6 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : LlamaForCausalLM_A
             labels = batch['labels'][..., :128]
             terminate = False
             if labels[0][-1] == -100: terminate = True
-            target_kv = None
             draft_kv_len = 0
             target_kv_len = 0
             while input_ids.shape[1] < 160 and terminate == False:
@@ -163,9 +162,9 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : LlamaForCausalLM_A
                 attn_mask.fill_(torch.finfo(dtype).min)
                 active_mark.fill_(0)
                 spectree = SpecTree(prefix=input_ids.squeeze(0), device='cuda:0', temperature=T,
-                                    top_p=top_p, target_kv=target_kv, 
+                                    top_p=top_p, 
                                     draft_kv_len=draft_kv_len, target_kv_len=target_kv_len,
-                                    draft_model_engine=draft_model, target_model=target_model, max_length=max_length, grow_map=grow_map,
+                                    draft_model_engine=draft_model, target_model_engine=target_model, max_length=max_length, grow_map=grow_map,
                                     attn_mask = attn_mask, sequence = sequence, new_tokens_buffer = new_tokens_buffer, 
                                     parents_buffer = parents_buffer, 
                                     position_ids = position_ids, active_mark = active_mark)
@@ -176,13 +175,12 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : LlamaForCausalLM_A
                 small_model_compute += b
                 torch.cuda.synchronize()
                 t3 = time.time()
-                valid_tokens, draft_kv_len, target_kv, x, y, z = spectree.verify(benchmark=True)
+                valid_tokens, draft_kv_len, target_kv_len, x, y, z = spectree.verify(benchmark=True)
                 large_model_run += x
                 accept_loop += y
                 kv_select += z
                 torch.cuda.synchronize()
                 t4 = time.time()
-                target_kv_len = target_kv[0][0].shape[-2]
                 num_decoding_steps += (valid_tokens.shape[0] - input_ids.shape[1])
                 num_large_model_steps += 1
                 input_ids = valid_tokens.unsqueeze(0)
@@ -190,7 +188,8 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : LlamaForCausalLM_A
                 initialize_time += (t2 - t1)
                 speculate_time += (t3 - t2)
                 verify_time += (t4 - t3)
-
+            draft_model.clear_kv()
+            target_model.clear_kv()
             if num_large_model_steps > 0:
                 print(num_decoding_steps / num_large_model_steps)
     print("total decoding steps: {}".format(num_decoding_steps), "large model steps: {}".format(num_large_model_steps), "avg decoding step: {}".format(num_decoding_steps / num_large_model_steps))
@@ -211,8 +210,9 @@ if args.offloading:
     target_model = LlamaForCausalLM_Attn.from_pretrained(args.target, torch_dtype=torch.float16)
     target_model = accelerate.cpu_offload(target_model, execution_device="cuda:0")
 else:
-    target_model = LlamaForCausalLM_Attn.from_pretrained(args.target, torch_dtype=torch.float16)
-    target_model = target_model.cuda()
+    target_model = GraphInferenceEngineTG(max_length=512, model_name_or_path = args.target, dtype = torch.float16, device="cuda:0")
+    # target_model = LlamaForCausalLM_Attn.from_pretrained(args.target, torch_dtype=torch.float16)
+    # target_model = target_model.cuda()
 if args.Mode != 'baseline':
     draft_model = GraphInferenceEngine(max_length=512, model_name_or_path = args.model, dtype = torch.float16, device="cuda:0")
     graph_capture_list = list(range(1, 129))

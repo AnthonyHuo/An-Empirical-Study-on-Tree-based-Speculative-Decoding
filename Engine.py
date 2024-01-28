@@ -97,6 +97,9 @@ class InferenceEngineTG:
     def clear_kv(self):
         self.kv_cache.clear()
     
+    def set_kv_len(self, kv_len :int):
+        self.kv_cache.set_kv_len(kv_len)
+    
     def initialize_kv(self, k_cache :torch.Tensor, v_cache :torch.Tensor, kv_len :int):
         self.kv_cache.initialize_kv(k_cache, v_cache, kv_len)
     
@@ -251,6 +254,9 @@ class GraphInferenceEngineTG:
     
     def gather_kv(self, indices: list[int]):
         self.engine.gather_kv(indices)
+    
+    def set_kv_len(self, kv_len :int):
+        self.engine.set_kv_len(kv_len)
     
     @torch.inference_mode()
     def inference(self,

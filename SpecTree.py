@@ -8,18 +8,17 @@ from tqdm import tqdm
 from Tree import Tree
 import time
 import deepspeed
-from Engine import GraphInferenceEngine
+from Engine import GraphInferenceEngine, GraphInferenceEngineTG
 from torch.profiler import profile, record_function, ProfilerActivity
 from utils import get_sampling_logits, make_tree_attention_mask, select_kv, ChildrenAccept, get_residual, cat_kv
 class SpecTree(Tree):
     def __init__(self, 
                  #draft_model :LlamaForCausalLM_Attn, 
                  draft_model_engine :GraphInferenceEngine,
-                 target_model :LlamaForCausalLM_Attn,
+                 target_model_engine :GraphInferenceEngineTG,
                  prefix :torch.LongTensor,
                  temperature :float = 0.6,
                  top_p: float = 0.9,
-                 target_kv = None,
                  draft_kv_len = 0,
                  target_kv_len = 0,
                  max_length = 256,
@@ -35,7 +34,7 @@ class SpecTree(Tree):
         assert self.max_length == draft_model_engine.engine.max_length
         #self.draft_model = draft_model.to(self.device).eval()
         self.draft_model_engine = draft_model_engine
-        self.target_model = target_model.eval()
+        self.target_model_engine = target_model_engine
         self.temperature = temperature
         self.top_p = top_p
         self.grow_map = grow_map
@@ -73,12 +72,7 @@ class SpecTree(Tree):
         self.draft_kv_len = self.num_nodes
         
         self.target_kv_len = target_kv_len
-        self.target_kv = target_kv
-        if self.target_kv is not None:
-            assert self.target_kv[0][0].shape[-2] == self.target_kv_len
-            assert self.target_kv_len == (self.num_nodes - 1)
-        else:
-            assert self.target_kv_len == 0
+        
         self.rand = torch.empty((self.tree_size, self.draft_logits.shape[1])).uniform_().to(self.device)
     
     @torch.inference_mode()
@@ -176,37 +170,35 @@ class SpecTree(Tree):
             start_pos = 0
             end_pos = self.num_nodes
             attn_mask = self.attn_mask[start_pos: end_pos, :end_pos]
-            attn_mask = attn_mask[None, None, :, :].type(self.target_model.dtype)
+            attn_mask = attn_mask[None, None, :, :].type(self.target_model_engine.dtype)
             if benchmark:
                 torch.cuda.synchronize()
                 t1 = time.time()
-            target_model_outputs = self.target_model(input_ids = self.tokens[start_pos : end_pos].unsqueeze(0), 
-                                    use_cache=True, position_ids = self.position_ids[start_pos : end_pos].unsqueeze(0), attention_mask = attn_mask)
+            target_model_outputs = self.target_model_engine.inference(input_ids = self.tokens[start_pos : end_pos].unsqueeze(0), 
+                                    position_ids = self.position_ids[start_pos : end_pos].unsqueeze(0), attn_mask = attn_mask, 
+                                    storage_ids=self.storage_ids[start_pos : end_pos])
             if benchmark:
                 torch.cuda.synchronize()
                 t2 = time.time()
-            self.target_kv = target_model_outputs.past_key_values
-            self.target_logits :torch.FloatTensor= target_model_outputs.logits[0][self.ground_truth_len - 1:]
+            self.target_logits :torch.FloatTensor= target_model_outputs[0][self.ground_truth_len - 1:]
             
         else:
-            assert self.target_kv[0][0].shape[-2] == self.target_kv_len
             start_pos = self.target_kv_len
             end_pos = self.num_nodes
             attn_mask = self.attn_mask[start_pos: end_pos, :end_pos]
-            attn_mask = attn_mask[None, None, :, :].type(self.target_model.dtype)
+            attn_mask = attn_mask[None, None, :, :].type(self.target_model_engine.dtype)
             if benchmark:
                 torch.cuda.synchronize()
                 t1 = time.time()
-            target_model_outputs = self.target_model(input_ids = self.tokens[self.target_kv_len: self.num_nodes].unsqueeze(0), 
-                                        use_cache=True,past_key_values=self.target_kv, 
-                                        position_ids =self.position_ids[start_pos : end_pos].unsqueeze(0), attention_mask = attn_mask)
+            target_model_outputs = self.target_model_engine.inference(input_ids = self.tokens[start_pos : end_pos].unsqueeze(0), 
+                                        position_ids =self.position_ids[start_pos : end_pos].unsqueeze(0), attn_mask = attn_mask,
+                                        storage_ids=self.storage_ids[start_pos : end_pos])
             
             if benchmark:
                 torch.cuda.synchronize()
                 t2 = time.time()
-            self.target_kv = target_model_outputs.past_key_values
-            self.target_logits :torch.FloatTensor = target_model_outputs.logits[0][-(new_node_num):]
-        self.target_kv_len = len(self.tokens)
+            self.target_logits :torch.FloatTensor = target_model_outputs[0][-(new_node_num):]
+        
         assert len(self.draft_logits) == (self.num_nodes - self.ground_truth_len + 1)
         assert len(self.target_logits) == (self.num_nodes - self.ground_truth_len + 1)
         self.target_logits = get_sampling_logits(logits=self.target_logits, top_p=self.top_p, T=self.temperature, replicate=False)
@@ -226,18 +218,18 @@ class SpecTree(Tree):
         if benchmark:
             torch.cuda.synchronize()
             t3 = time.time()
-        last_token = residual.multinomial(num_samples=1)
+        last_token = residual.multinomial(num_samples=1, replacement=True)
 
         accept_tokens = self.tokens[accept_list]
         valid_tokens = torch.cat([accept_tokens, last_token], dim=-1)
-        self.draft_model_engine.gather_kv(accept_list)
         
-        target_kv = select_kv(self.target_kv, accept_list)
+        self.draft_model_engine.gather_kv(accept_list)
+        self.target_model_engine.gather_kv(accept_list)
         if benchmark:
             torch.cuda.synchronize()
             t4 = time.time()
-            return valid_tokens, len(accept_list), target_kv, t2 - t1, t3-t2, t4-t3
-        return valid_tokens, len(accept_list), target_kv
+            return valid_tokens, len(accept_list), len(accept_list), t2 - t1, t3-t2, t4-t3
+        return valid_tokens, len(accept_list), len(accept_list)
     def verbose(self):
         super().verbose()
     

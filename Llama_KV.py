@@ -88,6 +88,8 @@ class KV_Cache:
                 return self.kv_offset
             else:
                 return self.kv_offset + input_length
-
+    
+    def set_kv_len(self, kv_len :int):
+            self.kv_offset = kv_len
     
         
