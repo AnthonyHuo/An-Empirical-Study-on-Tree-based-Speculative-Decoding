@@ -14,7 +14,7 @@ class InferenceEngine:
         self.dtype = dtype
         self.max_length = max_length
 
-        self.model = LlamaForCausalLM_FI.from_pretrained(model_name_or_path, torch_dtype=dtype, device_map=device, cache_dir="/scratch/rsadhukh/model/")
+        self.model = LlamaForCausalLM_FI.from_pretrained(model_name_or_path, torch_dtype=dtype, device_map=device)
         self.model.eval()
         self.model_config = self.model.config
 
@@ -67,7 +67,7 @@ class InferenceEngineTG:
         self.dtype = dtype
         self.max_length = max_length
 
-        self.model = LlamaForCausalLM_TG.from_pretrained(model_name_or_path, torch_dtype=dtype, device_map=device, cache_dir="/scratch/rsadhukh/model/")
+        self.model = LlamaForCausalLM_TG.from_pretrained(model_name_or_path, torch_dtype=dtype, device_map=device)
         self.model.eval()
         self.model_config = self.model.config
 
