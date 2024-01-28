@@ -145,7 +145,7 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngi
     parents_buffer =  torch.zeros(max_length).long().to('cuda:0')
     position_ids = torch.zeros(max_length).long().to('cuda:0')
     active_mark = torch.zeros(max_length).bool().to('cuda:0')
-    path = "/home/zhuominc/workspace/Sequoia/growmaps/68m_13b.pt"
+    path = "growmaps/68m_13b.pt"
 
     grow_map = torch.load(path)
     with torch.no_grad():
