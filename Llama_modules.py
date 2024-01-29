@@ -113,10 +113,9 @@ class LlamaAttention_FI(nn.Module):
         key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
         value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
         
-        
+
         cos, sin = self.rotary_emb(value_states.dtype, seq_len=max_length)
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
-        
         
         key_states, value_states = kv_cache.update_kv_cache(key_states, value_states, 
                                         self.layer_idx, storage_ids=storage_ids, debug=debug)

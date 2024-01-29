@@ -16,7 +16,7 @@ class KV_Cache:
         self.k_cache = torch.zeros(
             config.num_hidden_layers,
             batch_size,
-            config.num_attention_heads,
+            config.num_key_value_heads,
             max_length,
             config.hidden_size // config.num_attention_heads,
             device=self.device,
@@ -26,7 +26,7 @@ class KV_Cache:
         self.v_cache = torch.zeros(
             config.num_hidden_layers,
             batch_size,
-            config.num_attention_heads,
+            config.num_key_value_heads,
             max_length,
             config.hidden_size // config.num_attention_heads,
             device=self.device,
