@@ -2,16 +2,18 @@ import torch
 torch.set_printoptions(profile="full")
 import json
 from copy import deepcopy
-p = torch.tensor([0.0, 0.6251, 0.1074, 0.0473, 0.0298, 0.0213, 0.0137, 0.0129, 0.0090, 0.0083,
-        0.0069, 0.0059, 0.0058, 0.0045, 0.0034, 0.0036, 0.0031, 0.0030, 0.0031,
-        0.0022, 0.0027, 0.0020, 0.0015, 0.0013, 0.0020, 0.0012, 0.0015, 0.0011,
-        0.0013, 0.0012, 0.0018, 0.0012, 0.0009])
+p = torch.tensor([0.0, 8.1058e-01, 8.5745e-02, 3.2890e-02, 1.7190e-02, 1.1283e-02, 7.3646e-03,
+        5.5534e-03, 3.7437e-03, 3.1577e-03, 2.6452e-03, 1.9326e-03, 1.4449e-03,
+        1.1956e-03, 1.0326e-03, 1.1496e-03, 1.0294e-03, 5.6361e-04, 5.4559e-04,
+        5.0096e-04, 6.0773e-04, 2.8959e-04, 4.0065e-04, 3.3581e-04, 3.6632e-04,
+        4.1801e-04, 3.9557e-04, 3.6161e-04, 2.9983e-04, 2.3403e-04, 1.7872e-04,
+        2.7581e-04, 1.0436e-04])
 
 max_branch = p.shape[0] - 1
 
-max_depth = 15
+max_depth = 32
 
-max_budget = 128
+max_budget = 1024
 
 T = torch.zeros((max_budget + 1, max_depth + 1, max_branch + 1)).fill_(-torch.inf)
 T_max = torch.zeros((max_budget + 1, max_depth + 1))
@@ -49,7 +51,7 @@ for m in range(2, max_budget+1):
 
 results = T.max(dim=2).values
 print(results)
-
+exit(0)
 draft_inference_time = 0.0004
 target_verify_time = [
                     0.024392514705657956,

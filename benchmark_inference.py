@@ -6,9 +6,10 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', type=str, default="meta-llama/Llama-2-7b-hf", help='model')
 parser.add_argument('--T', type=int, default=100, help='time')
-parser.add_argument('--M', type=int, default=256, help='max length')
+parser.add_argument('--M', type=int, default=384, help='max length')
 parser.add_argument('--P', type=int, default=192, help='prefix length')
 parser.add_argument('--D', type=int, default=128, help='dec length')
+parser.add_argument('--offloading', action='store_true')
 args = parser.parse_args()
 PREFIX_LEN = args.P
 MAX_LEN = args.M
@@ -24,7 +25,7 @@ attn_mask = _make_causal_mask((MAX_LEN, MAX_LEN), dtype=DTYPE, device=DEVICE)
 attn_mask = attn_mask[None, None, :, :]
 prefix_position_ids = torch.arange(PREFIX_LEN, device=DEVICE).unsqueeze(0)
 
-graph_engine = GraphInferenceEngineTG(max_length=MAX_LEN, model_name_or_path=MODEL_NAME, dtype=DTYPE, device=DEVICE)
+graph_engine = GraphInferenceEngineTG(max_length=MAX_LEN, model_name_or_path=MODEL_NAME, dtype=DTYPE, device=DEVICE, offloading=args.offloading)
 
 
 graph_engine.inference(input_ids=prefix, storage_ids=prefix_storage_ids, position_ids=prefix_position_ids, attn_mask=attn_mask[..., :PREFIX_LEN,:PREFIX_LEN])
