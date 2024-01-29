@@ -13,13 +13,3 @@ CUDA_VISIBLE_DEVICES=0 python benchmark_inference.py --P 128 --D 32
 CUDA_VISIBLE_DEVICES=0 python benchmark_inference.py --P 128 --D 64
 
 CUDA_VISIBLE_DEVICES=0 python benchmark_inference.py --P 128 --D 128
-
-CUDA_VISIBLE_DEVICES=0 python benchmark_inference.py --P 128 --D 192
-
-CUDA_VISIBLE_DEVICES=0 python benchmark_inference.py --P 128 --D 208
-
-CUDA_VISIBLE_DEVICES=0 python benchmark_inference.py --P 128 --D 224
-
-CUDA_VISIBLE_DEVICES=0 python benchmark_inference.py --P 128 --D 240
-
-CUDA_VISIBLE_DEVICES=0 python benchmark_inference.py --P 128 --D 256
