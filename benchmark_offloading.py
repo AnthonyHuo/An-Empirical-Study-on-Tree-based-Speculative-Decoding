@@ -8,8 +8,7 @@ parser.add_argument('--model', type=str, default="meta-llama/Llama-2-70b-hf",hel
 parser.add_argument('--T', type=int, default=10, help='repeat times')
 parser.add_argument('--B', type=int, default=1, help='batch size')
 parser.add_argument('--P', type=int, default=128, help='prefix length')
-
-parser.add_argument('--M', type=int, default=256, help='max length')
+parser.add_argument('--M', type=int, default=1536, help='max length')
 parser.add_argument('--D', type=int, default=8, help='dec length')
 args = parser.parse_args()
 print(args)

@@ -92,7 +92,7 @@ def simulation_greedy_with_tree_fast(target_model : GraphInferenceEngineTG, draf
 
 
 
-def simulation_baseline(target_model : GraphInferenceEngineTG, dataloader: DataLoader, T=0.6, top_p=0.9, max_length=512):
+def simulation_baseline(target_model : GraphInferenceEngineTG, dataloader: DataLoader, T=0.6, top_p=0.9, max_length=256):
     num_eval_steps = len(dataloader)
     num_decoding_steps = 0
     total_time = 0.0
