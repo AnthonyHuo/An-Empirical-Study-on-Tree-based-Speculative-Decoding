@@ -14,7 +14,7 @@ from SpecTree import SpecTree
 from Llama import LlamaForCausalLM_Attn
 import time
 from time import sleep
-from utils import get_sampling_logits
+from utils import get_sampling_logits, _make_causal_mask
 import json
 from Engine import GraphInferenceEngine, GraphInferenceEngineTG
 parser = argparse.ArgumentParser()
@@ -92,37 +92,47 @@ def simulation_greedy_with_tree_fast(target_model : GraphInferenceEngineTG, draf
 
 
 
-def simulation_baseline(target_model : LlamaForCausalLM_Attn, dataloader: DataLoader, T=0.6, top_p=0.9):
+def simulation_baseline(target_model : GraphInferenceEngineTG, dataloader: DataLoader, T=0.6, top_p=0.9, max_length=512):
     num_eval_steps = len(dataloader)
     num_decoding_steps = 0
     total_time = 0.0
-    with torch.no_grad():
+    with torch.inference_mode():
         for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
             input_ids = batch['input_ids'][..., :128]
             labels = batch['labels'][..., :128]
             terminate = False
             if labels[0][-1] == -100: terminate = True
-            target_kv = None
+            position_ids = torch.arange(max_length).to('cuda:0').unsqueeze(0)
+            storage_ids = torch.arange(max_length).to('cuda:0')
+            attn_mask = _make_causal_mask((max_length, max_length), target_model.dtype, target_model.device)
             torch.cuda.synchronize()
             t1 = time.time()
             inner_decoding_step = 0
+            start_length = 0
             while inner_decoding_step < 128 and terminate == False:
-               
-                output = target_model(input_ids = input_ids, use_cache=True, past_key_values=target_kv)
+                if inner_decoding_step == 0:
+                    start_length = input_ids.shape[1]
+                    logits = target_model.inference(input_ids = input_ids, storage_ids=storage_ids[:start_length],
+                                                    position_ids = position_ids[..., :start_length], 
+                                                    attn_mask=attn_mask[:start_length, :start_length][None, None, :, :])[0][-1]
+                    
+                else:
+                    logits = target_model.inference(input_ids = input_ids, storage_ids=storage_ids[start_length + inner_decoding_step-1 : start_length + inner_decoding_step],
+                                                    position_ids = position_ids[..., start_length + inner_decoding_step-1 : start_length + inner_decoding_step], 
+                                                    attn_mask=attn_mask[start_length + inner_decoding_step-1 : start_length + inner_decoding_step, :start_length + inner_decoding_step][None, None, :, :])[0][-1]
                 
-                target_kv = output.past_key_values
-                logits :torch.Tensor = output.logits[0][-1]
                 logits = get_sampling_logits(logits=logits, top_p=top_p, T=T)
+                
                 p = softmax(logits / T, dim=-1)
                 new_token = p.multinomial(num_samples=1).unsqueeze(0)
                 input_ids = new_token
-                
                 num_decoding_steps += 1
                 inner_decoding_step += 1
                 if input_ids[0][-1] == 2: terminate = True
             torch.cuda.synchronize()
             t2 = time.time()
             total_time += (t2 - t1)
+            target_model.clear_kv()
             
     print("total time :{:.5f}s, latency :{:.5f}s, decoding step: {}".format(total_time, total_time / num_decoding_steps, num_decoding_steps))
     return num_decoding_steps
@@ -209,14 +219,12 @@ else:
 data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
 dataloader = DataLoader(tokenized_dataset_eval, batch_size=1, collate_fn=data_collator)
 
-if args.offloading:
-    target_model = LlamaForCausalLM_Attn.from_pretrained(args.target, torch_dtype=torch.float16)
-    target_model = accelerate.cpu_offload(target_model, execution_device="cuda:0")
-elif args.Mode == 'baseline':
-    target_model = LlamaForCausalLM_Attn.from_pretrained(args.target, torch_dtype=torch.float16).cuda()
+
+if args.Mode == 'baseline':
+    target_model =  GraphInferenceEngineTG(max_length=args.M, model_name_or_path = args.target, dtype = torch.float16, device="cuda:0", offloading=args.offloading)
 else:
     draft_model = GraphInferenceEngine(max_length=args.M, model_name_or_path = args.model, dtype = torch.float16, device="cuda:0")
-    target_model = GraphInferenceEngineTG(max_length=args.M, model_name_or_path = args.target, dtype = torch.float16, device="cuda:0")
+    target_model = GraphInferenceEngineTG(max_length=args.M, model_name_or_path = args.target, dtype = torch.float16, device="cuda:0", offloading=args.offloading)
     graph_capture_list = list(range(1, 129))
     draft_model.initialize_cuda_graph(graph_capture_list)
 

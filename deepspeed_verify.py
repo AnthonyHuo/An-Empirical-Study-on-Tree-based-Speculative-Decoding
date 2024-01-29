@@ -5,7 +5,7 @@ import time
 import deepspeed
 #from Llama import LlamaForCausalLM_Attn
 parser = argparse.ArgumentParser()
-parser.add_argument('--model', type=str, default="meta-llama/Llama-2-13b-hf",help='model')
+parser.add_argument('--model', type=str, default="meta-llama/Llama-2-7b-hf",help='model')
 parser.add_argument('--T', type=int, default=100, help='repeat times')
 parser.add_argument('--B', type=int, default=1, help='batch size')
 parser.add_argument('--P', type=int, default=128, help='prefix length')
@@ -17,7 +17,7 @@ draft_model = LlamaForCausalLM.from_pretrained(args.model)
 
 
 draft_model = deepspeed.init_inference(draft_model,  
-                dtype=torch.float16, replace_with_kernel_inject=True)
+                dtype=torch.float16, enable_cuda_graph=True)
 T = args.T
 B = args.B
 P = args.P

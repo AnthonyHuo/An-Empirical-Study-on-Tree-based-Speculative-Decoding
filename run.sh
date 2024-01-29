@@ -1,6 +1,4 @@
-python deepspeed_verify.py --P 32 >> deepspeed.log
-python deepspeed_verify.py --P 64 >> deepspeed.log
-python deepspeed_verify.py --P 128 >> deepspeed.log
-python deepspeed_verify.py --P 192 >> deepspeed.log
-python deepspeed_verify.py --P 256 >> deepspeed.log
+CUDA_VISIBLE_DEVICES=5 python deepspeed_verify.py --P 32 >> 7b.log
+CUDA_VISIBLE_DEVICES=5 python deepspeed_verify.py --P 64 >> 7b.log
+CUDA_VISIBLE_DEVICES=5 python deepspeed_verify.py --P 128 >> 7b.log
 

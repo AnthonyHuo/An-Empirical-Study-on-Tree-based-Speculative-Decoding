@@ -3,6 +3,7 @@ from Llama_KV import KV_Cache
 from Llama_model import LlamaForCausalLM_FI, LlamaForCausalLM_TG
 from typing import List, Optional, Tuple, Union
 import gc
+import accelerate
 class InferenceEngine:
     def __init__(self, 
         max_length:int,
@@ -61,14 +62,21 @@ class InferenceEngineTG:
         max_length:int,
         model_name_or_path :str,
         dtype = torch.float16,
-        device = "cuda:0") -> None:
+        device = "cuda:0",
+        offloading = False) -> None:
         
         self.device = device
         self.dtype = dtype
         self.max_length = max_length
 
-        self.model = LlamaForCausalLM_TG.from_pretrained(model_name_or_path, torch_dtype=dtype, device_map=device)
-        self.model.eval()
+        
+        if offloading:
+            self.model = LlamaForCausalLM_TG.from_pretrained(model_name_or_path, torch_dtype=dtype)
+            self.model.eval()
+            self.model = accelerate.cpu_offload(self.model, execution_device=device)
+        else:
+            self.model = LlamaForCausalLM_TG.from_pretrained(model_name_or_path, torch_dtype=dtype, device_map=device)
+            self.model.eval()
         self.model_config = self.model.config
 
         self.kv_cache = KV_Cache(config=self.model_config, max_length=max_length, device=device, dtype=dtype)
@@ -237,12 +245,13 @@ class GraphInferenceEngineTG:
         max_length:int,
         model_name_or_path :str,
         dtype = torch.float16,
-        device = "cuda:0") -> None:
+        device = "cuda:0",
+        offloading = False) -> None:
 
         self.device = device
         self.dtype = dtype
         self.max_length = max_length
-        self.engine = InferenceEngineTG(max_length=max_length, model_name_or_path=model_name_or_path, dtype=dtype, device=device)
+        self.engine = InferenceEngineTG(max_length=max_length, model_name_or_path=model_name_or_path, dtype=dtype, device=device, offloading=offloading)
     def clear_kv(self):
         self.engine.clear_kv()
     
