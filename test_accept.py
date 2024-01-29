@@ -65,14 +65,13 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngi
             target_kv_len = 0
             while input_ids.shape[1] < 256 and terminate == False:
                 attn_mask.fill_(torch.finfo(dtype).min)
-                active_mark.fill_(0)
                 spectree = SpecTreeTest(prefix=input_ids.squeeze(0), device='cuda:0', temperature=T,
                                     top_p=top_p, 
                                     draft_kv_len=draft_kv_len, target_kv_len=target_kv_len,
                                     draft_model_engine=draft_model, target_model_engine=target_model, max_length=max_length,
                                     attn_mask = attn_mask, sequence = sequence, new_tokens_buffer = new_tokens_buffer, 
                                     parents_buffer = parents_buffer, 
-                                    position_ids = position_ids, active_mark = active_mark, max_width=w)
+                                    position_ids = position_ids, max_width=w)
                 
                 
                 valid_tokens, draft_kv_len, target_kv_len,  b = spectree.verify(benchmark=True)
@@ -109,22 +108,21 @@ def simulation_greedy_with_tree_fast_benchmark_cover(target_model : GraphInferen
     branch_prob = torch.zeros(w + 1).to('cuda:0')
     with torch.no_grad():
         for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
-            input_ids = batch['input_ids'][..., :32]
-            labels = batch['labels'][..., :32]
+            input_ids = batch['input_ids'][..., :128]
+            labels = batch['labels'][..., :128]
             terminate = False
             if labels[0][-1] == -100: terminate = True
             draft_kv_len = 0
             target_kv_len = 0
-            while input_ids.shape[1] < 128 and terminate == False:
+            while input_ids.shape[1] < 256 and terminate == False:
                 attn_mask.fill_(torch.finfo(dtype).min)
-                active_mark.fill_(0)
                 spectree = CoverTreeTest(prefix=input_ids.squeeze(0), device='cuda:0', temperature=T,
                                     top_p=top_p, 
                                     draft_kv_len=draft_kv_len, target_kv_len=target_kv_len,
                                     draft_model_engine=draft_model, target_model_engine=target_model, max_length=max_length,
                                     attn_mask = attn_mask, sequence = sequence, new_tokens_buffer = new_tokens_buffer, 
                                     parents_buffer = parents_buffer, 
-                                    position_ids = position_ids, active_mark = active_mark, max_width=w)
+                                    position_ids = position_ids, max_width=w)
                 
                 
                 valid_tokens, draft_kv_len, target_kv_len,  b = spectree.verify(benchmark=True)

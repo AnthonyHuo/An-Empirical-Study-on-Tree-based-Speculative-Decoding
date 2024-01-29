@@ -20,7 +20,7 @@ from Engine import GraphInferenceEngine, GraphInferenceEngineTG
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', type=str, help='model')
 parser.add_argument('--target', type=str, help='target model')
-parser.add_argument('--dataset', type=str, default="c4_small.json", help='dataset path')
+parser.add_argument('--dataset', type=str, default="./dataset/c4_small.json", help='dataset path')
 parser.add_argument('--start', type=int, default=0, help='start')
 parser.add_argument('--end', type=int, default=200, help='end')
 parser.add_argument('--T', type=float, default=0.6, help='temperature')
