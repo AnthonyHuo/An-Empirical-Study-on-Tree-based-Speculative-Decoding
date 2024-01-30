@@ -1,0 +1,27 @@
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                             aten::topk        39.60%     746.139ms        65.03%        1.225s     122.533us     180.245ms        93.54%     218.107ms      21.811us         10000  
+                                       cudaLaunchKernel        21.58%     406.580ms        21.58%     406.580ms       3.696us      16.687ms         8.66%      16.782ms       0.153us        110000  
+                               TorchDynamo Cache Lookup        20.12%     379.098ms        20.12%     379.098ms      37.910us       0.000us         0.00%       0.000us       0.000us         10000  
+                       triton_poi_fused_div_index_log_0         7.36%     138.670ms        11.03%     207.804ms      20.780us      12.450ms         6.46%      13.962ms       1.396us         10000  
+                                    aten::empty_strided         3.79%      71.409ms         3.79%      71.409ms       7.141us       0.000us         0.00%       0.000us       0.000us         10000  
+                                         cuLaunchKernel         3.67%      69.134ms         3.67%      69.134ms       6.913us       1.512ms         0.78%       1.512ms       0.151us         10000  
+                                        cudaMemsetAsync         3.27%      61.540ms         3.27%      61.540ms       3.077us       3.015ms         1.56%       3.015ms       0.151us         20000  
+cudaOccupancyMaxActiveBlocksPerMultiprocessorWithFla...         0.52%       9.737ms         0.52%       9.737ms       0.487us       2.994ms         1.55%       2.994ms       0.150us         20000  
+                                 cudaDeviceGetAttribute         0.07%       1.277ms         0.07%       1.277ms       0.064us       3.033ms         1.57%       3.033ms       0.152us         20000  
+                                  cudaDeviceSynchronize         0.04%     671.000us         0.04%     671.000us     671.000us       0.000us         0.00%       0.000us       0.000us             1  
+                                    cudaPeekAtLastError         0.00%      53.000us         0.00%      53.000us       0.001us      12.133ms         6.30%      12.133ms       0.152us         79994  
+                                     triton__0d1d2d3d4d         0.00%       0.000us         0.00%       0.000us       0.000us      12.450ms         6.46%      12.450ms       1.245us         10000  
+                                        Memset (Device)         0.00%       0.000us         0.00%       0.000us       0.000us       7.833ms         4.06%       7.833ms       0.392us         20000  
+void at::native::mbtopk::fill<unsigned int, unsigned...         0.00%       0.000us         0.00%       0.000us       0.000us     822.000us         0.43%     822.000us       0.082us         10000  
+void at::native::mbtopk::radixFindKthValues<c10::Hal...         0.00%       0.000us         0.00%       0.000us       0.000us      60.734ms        31.52%      60.734ms       3.037us         20000  
+void at::native::mbtopk::computeBlockwiseWithinKCoun...         0.00%       0.000us         0.00%       0.000us       0.000us      20.029ms        10.39%      20.029ms       1.001us         20000  
+void at::native::mbtopk::computeBlockwiseKthCounts<u...         0.00%       0.000us         0.00%       0.000us       0.000us      10.002ms         5.19%      10.002ms       1.000us         10000  
+void at_cuda_detail::cub::DeviceScanByKeyInitKernel<...         0.00%       0.000us         0.00%       0.000us       0.000us     482.000us         0.25%     482.000us       0.024us         20000  
+void at_cuda_detail::cub::DeviceScanByKeyKernel<at_c...         0.00%       0.000us         0.00%       0.000us       0.000us      40.029ms        20.77%      40.029ms       2.001us         20000  
+void at::native::mbtopk::gatherTopK<c10::Half, unsig...         0.00%       0.000us         0.00%       0.000us       0.000us      40.319ms        20.92%      40.319ms       4.032us         10000  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 1.884s
+Self CUDA time total: 192.700ms
+

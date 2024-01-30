@@ -56,6 +56,16 @@ class KV_Cache:
         self.v_cache[..., len(indices):, :] = 0.0
 
         self.kv_offset = len(indices)
+    
+    def gather_kv_incremental(self, indices: list[int], offset:int):
+
+        self.k_cache[..., offset:offset + len(indices), :] = self.k_cache[..., indices, :]
+        self.v_cache[..., offset:offset + len(indices), :] = self.v_cache[..., indices, :]
+
+        self.k_cache[..., offset + len(indices):, :] = 0.0
+        self.v_cache[..., offset + len(indices):, :] = 0.0
+
+        self.kv_offset = offset + len(indices)
 
 
     

@@ -48,6 +48,7 @@ class CoverTree(Tree):
         self.set_prefix(prefix=prefix)
         self.tree_size = self.grow_map["size"]
         self.tree_mask = tree_mask
+        self.attn_mask = self.full_attn_mask[:self.max_length, :self.max_length]
         self.attn_mask[len(prefix) : len(prefix) + self.tree_size, : len(prefix)] = 0.0
         self.attn_mask[len(prefix) : len(prefix) + self.tree_size - 1, len(prefix) : len(prefix) + self.tree_size - 1] = tree_mask[1:, 1:]
         self.ground_truth_len = len(prefix)
@@ -306,6 +307,7 @@ class CoverTreeTest(Tree):
 
         self.Successors = [list(range(1, self.max_width + 1))]
         self.Successors.extend([[] for _ in range(self.max_width)])
+        self.attn_mask = self.full_attn_mask[:self.max_length, :self.max_length]
         for idx in range(self.max_width):
              self.attn_mask[idx + self.num_nodes] = self.attn_mask[self.num_nodes - 1]
              self.attn_mask[idx + self.num_nodes][idx + self.num_nodes] = 0.0

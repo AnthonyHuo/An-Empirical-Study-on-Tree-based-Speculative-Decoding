@@ -14,7 +14,7 @@ from SpecTree import SpecTree
 from Llama import LlamaForCausalLM_Attn
 import time
 from time import sleep
-from utils import get_sampling_logits, _make_causal_mask
+from utils import get_sampling_logits, _make_causal_mask, get_residual
 import json
 from Engine import GraphInferenceEngine, GraphInferenceEngineTG
 parser = argparse.ArgumentParser()
@@ -154,8 +154,7 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngi
     new_tokens_buffer =  torch.zeros(max_length).long().to('cuda:0')
     parents_buffer =  torch.zeros(max_length).long().to('cuda:0')
     position_ids = torch.zeros(max_length).long().to('cuda:0')
-    active_mark = torch.zeros(max_length).bool().to('cuda:0')
-    path = "growmaps/68m_7b-64.pt"
+    path = "growmaps/68m_7b.pt"
 
     grow_map = torch.load(path)
     with torch.no_grad():
@@ -230,6 +229,8 @@ else:
 
 accelerator = Accelerator()
 dataloader = accelerator.prepare(dataloader)
+
+#warm up functions:
 
 if args.Mode == 'benchmark':
     simulation_greedy_with_tree_fast_benchmark(target_model=target_model, draft_model=draft_model, dataloader=dataloader, T=args.T, top_p=args.P, budget=args.B, draft_top_p=args.DP, w=args.W, negative=args.negative, decay=args.decay, static=args.static, max_length=args.M)

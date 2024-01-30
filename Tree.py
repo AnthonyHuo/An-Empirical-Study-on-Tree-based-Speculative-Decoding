@@ -17,21 +17,21 @@ class Tree:
 
 
     def initialize(self, attn_mask, sequence, new_tokens_buffer, parents_buffer, position_ids, active_mark):
-        self.attn_mask = attn_mask
+        self.full_attn_mask = attn_mask
         self.sequence = sequence
         self.new_tokens_buffer = new_tokens_buffer
         self.parents_buffer = parents_buffer
         self.position_ids = position_ids
         self.active_mark = active_mark
-
-        assert self.attn_mask.shape[1] == self.max_length
+        self.full_attn_mask = self.full_attn_mask.repeat(2, 2)
+        # assert self.attn_mask.shape[1] == self.max_length
 
     def set_prefix(self, prefix: torch.LongTensor):
         self.tokens[:len(prefix)] = prefix.to(self.device)
         self.position_ids[:len(prefix)] = torch.arange(len(prefix))
         
         self.num_nodes = len(prefix)
-        self.attn_mask[:self.num_nodes, :self.num_nodes] = _make_causal_mask((1, self.num_nodes),dtype=self.dtype, device=self.device)
+        self.full_attn_mask[:self.max_length, :self.max_length] = _make_causal_mask((1, self.max_length),dtype=self.dtype, device=self.device)
 
         
         

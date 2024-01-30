@@ -1,0 +1,27 @@
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                               TorchDynamo Cache Lookup        31.59%     390.876ms        31.59%     390.876ms      39.088us       0.000us         0.00%       0.000us       0.000us         10000  
+                                            aten::copy_        13.55%     167.651ms        31.06%     384.334ms      12.811us      29.842ms        13.92%      31.654ms       1.055us         30000  
+                                        cudaGraphLaunch        20.29%     251.032ms        20.29%     251.032ms      25.103us     505.000us         0.24%     505.000us       0.051us         10000  
+                                        cudaMemcpyAsync        17.51%     216.683ms        17.51%     216.683ms       7.223us       1.812ms         0.85%       1.812ms       0.060us         30000  
+                                            aten::fill_         8.61%     106.487ms        16.81%     208.005ms      10.400us     853.000us         0.40%       2.123ms       0.106us         20000  
+                                       cudaLaunchKernel         8.20%     101.518ms         8.20%     101.518ms       5.076us       1.270ms         0.59%       1.270ms       0.064us         20000  
+                                  cudaDeviceSynchronize         0.15%       1.918ms         0.15%       1.918ms       1.918ms       0.000us         0.00%       0.000us       0.000us             1  
+                                  cudaStreamIsCapturing         0.11%       1.302ms         0.11%       1.302ms       0.065us       1.150ms         0.54%       1.150ms       0.058us         20000  
+                                   cudaDriverGetVersion         0.00%      13.000us         0.00%      13.000us       0.001us     635.000us         0.30%     635.000us       0.064us         10000  
+                         Memcpy DtoD (Device -> Device)         0.00%       0.000us         0.00%       0.000us       0.000us      29.842ms        13.92%      29.842ms       0.995us         30000  
+void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us     853.000us         0.40%     853.000us       0.043us         20000  
+                                     triton__0d1d2d3d4d         0.00%       0.000us         0.00%       0.000us       0.000us      11.554ms         5.39%      11.554ms       1.155us         10000  
+                                       Memset (Unknown)         0.00%       0.000us         0.00%       0.000us       0.000us       8.896ms         4.15%       8.896ms       0.445us         20000  
+void at::native::mbtopk::fill<unsigned int, unsigned...         0.00%       0.000us         0.00%       0.000us       0.000us     973.000us         0.45%     973.000us       0.097us         10000  
+void at::native::mbtopk::radixFindKthValues<c10::Hal...         0.00%       0.000us         0.00%       0.000us       0.000us      60.415ms        28.18%      60.415ms       3.021us         20000  
+void at::native::mbtopk::computeBlockwiseWithinKCoun...         0.00%       0.000us         0.00%       0.000us       0.000us      20.301ms         9.47%      20.301ms       1.015us         20000  
+void at::native::mbtopk::computeBlockwiseKthCounts<u...         0.00%       0.000us         0.00%       0.000us       0.000us      10.000ms         4.66%      10.000ms       1.000us         10000  
+void at_cuda_detail::cub::DeviceScanByKeyInitKernel<...         0.00%       0.000us         0.00%       0.000us       0.000us     197.000us         0.09%     197.000us       0.010us         20000  
+void at_cuda_detail::cub::DeviceScanByKeyKernel<at_c...         0.00%       0.000us         0.00%       0.000us       0.000us      40.196ms        18.75%      40.196ms       2.010us         20000  
+void at::native::mbtopk::gatherTopK<c10::Half, unsig...         0.00%       0.000us         0.00%       0.000us       0.000us      31.167ms        14.54%      31.167ms       3.117us         10000  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 1.237s
+Self CUDA time total: 214.394ms
+

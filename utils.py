@@ -2,12 +2,12 @@ import torch
 import dataclasses
 import math
 from copy import deepcopy
-from torch.nn.functional import relu
+from torch.nn.functional import relu, normalize
+
 def get_residual(p: torch.Tensor, q:torch.Tensor):
-    residual = p - q
-    residual.relu_()
-    residual = residual / (residual.sum(dim=-1).unsqueeze(-1) + 1e-9)
-    return residual
+    # residual = 
+    # residual = residual / (residual.sum(dim=-1).unsqueeze(-1) + 1e-9)
+    return normalize((p - q).relu_(), p=1.0, dim=-1)
 
 def expand_kv(kv_cache, k):
     kv_shape = kv_cache[0][0].shape
@@ -38,6 +38,7 @@ def make_tree_attention_mask(
         if len(ancestor) > 0:
             tree_mask[idx][ancestor] = 0.0
     return tree_mask[None, None, :, :]
+
 
 def get_sampling_logits(logits :torch.Tensor, top_p:float, T: float, replicate = False):
     if replicate:
