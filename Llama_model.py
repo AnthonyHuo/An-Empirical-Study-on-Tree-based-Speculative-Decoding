@@ -212,7 +212,7 @@ class LlamaForCausalLM_FI(LlamaPreTrainedModel):
         hidden_states = outputs
        
         logits = self.lm_head(hidden_states)
-        logits = logits.float()
+        
 
         return logits
 
@@ -297,6 +297,4 @@ class LlamaForCausalLM_TG(LlamaPreTrainedModel):
         hidden_states = outputs
        
         logits = self.lm_head(hidden_states)
-        logits = logits.float()
-
         return logits

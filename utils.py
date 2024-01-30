@@ -5,9 +5,9 @@ from copy import deepcopy
 from torch.nn.functional import relu, normalize
 
 def get_residual(p: torch.Tensor, q:torch.Tensor):
-    # residual = 
-    # residual = residual / (residual.sum(dim=-1).unsqueeze(-1) + 1e-9)
-    return normalize((p - q).relu_(), p=1.0, dim=-1)
+    residual = (p - q).relu_()
+    residual = residual / (residual.sum(dim=-1).unsqueeze(-1) + 1e-9)
+    return residual
 
 def expand_kv(kv_cache, k):
     kv_shape = kv_cache[0][0].shape
@@ -82,3 +82,38 @@ def _make_causal_mask(
     mask.masked_fill_(mask_cond < (mask_cond + 1).view(mask.size(-1), 1), 0)
     mask = mask.to(dtype)
     return mask
+
+def cuda_graph_for_residual(device="cuda:0", dtype=torch.float16, dim=32000, n_warmups=3, mempool=None):
+    static_p = torch.full((dim,), 1, dtype=dtype, device=device)
+    static_q = torch.full((dim,), 0, dtype=dtype, device=device)
+
+    s = torch.cuda.Stream()
+    s.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(s):
+        for _ in range(n_warmups):
+            static_residual = get_residual(
+                    static_p,
+                    static_q
+                    )
+        s.synchronize()
+    torch.cuda.current_stream().wait_stream(s)
+
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph, pool=mempool):
+         static_residual = get_residual(
+                    static_p,
+                    static_q
+                    )
+    def run(p, q):
+        static_p.copy_(p)
+        static_q.copy_(q)
+        graph.replay()
+        return static_residual.clone()
+    
+    return run
+    
+        
+
+
+
+

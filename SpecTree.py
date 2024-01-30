@@ -30,7 +30,8 @@ class SpecTree(Tree):
                  sequence = None, 
                  new_tokens_buffer = None, 
                  parents_buffer = None, 
-                 position_ids = None) -> None:
+                 position_ids = None,
+                 residual_graph = None) -> None:
         super().__init__(device=device, max_length=max_length)
         assert self.max_length == draft_model_engine.engine.max_length
         self.max_target_seq = max_target_seq
@@ -39,6 +40,7 @@ class SpecTree(Tree):
         self.target_model_engine = target_model_engine
         self.temperature = temperature
         self.top_p = top_p
+        self.residual_graph = residual_graph
         self.grow_map = grow_map
         self.draft_step = len(self.grow_map["roots"])
         self.grow_map_roots_gpu = []
@@ -172,7 +174,8 @@ class SpecTree(Tree):
                 #return ChildrenAccept(accept_mark=0, token=token, position=pos + (self.ground_truth_len - 1), successor_order=idx)
                 return (pos + (self.ground_truth_len - 1), None)
             else:
-                p = get_residual(p, q)
+                
+                p = self.residual_graph(p, q)
                 draft_logits[token] = -torch.inf
         
         return (-1, p)

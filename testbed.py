@@ -14,7 +14,7 @@ from SpecTree import SpecTree
 from Llama import LlamaForCausalLM_Attn
 import time
 from time import sleep
-from utils import get_sampling_logits, _make_causal_mask, get_residual
+from utils import get_sampling_logits, _make_causal_mask, get_residual, cuda_graph_for_residual
 import json
 from Engine import GraphInferenceEngine, GraphInferenceEngineTG
 parser = argparse.ArgumentParser()
@@ -40,7 +40,7 @@ print(args)
 
 
 
-def simulation_greedy_with_tree_fast(target_model : GraphInferenceEngineTG, draft_model: GraphInferenceEngine, dataloader: DataLoader, T=0.6, top_p=0.9, draft_top_p=1.1, budget=32, w=4, decay=0.85, negative=False, static=False, max_length=512):
+def simulation_greedy_with_tree_fast(target_model : GraphInferenceEngineTG, draft_model: GraphInferenceEngine, dataloader: DataLoader, T=0.6, top_p=0.9, draft_top_p=1.1, budget=32, w=4, decay=0.85, negative=False, static=False, max_length=512, residual_graph=None):
     num_eval_steps = len(dataloader)
     num_decoding_steps = 0
     num_large_model_steps = 0
@@ -70,7 +70,8 @@ def simulation_greedy_with_tree_fast(target_model : GraphInferenceEngineTG, draf
                                     draft_model_engine=draft_model, target_model_engine=target_model, max_length=max_length, grow_map=grow_map,
                                     attn_mask = attn_mask, sequence = sequence, new_tokens_buffer = new_tokens_buffer, 
                                     parents_buffer = parents_buffer, 
-                                    position_ids = position_ids)
+                                    position_ids = position_ids,
+                                    residual_graph = residual_graph)
             torch.cuda.synchronize()
             t1 = time.time()
             while input_ids.shape[1] < 256 and terminate == False:
@@ -136,7 +137,7 @@ def simulation_baseline(target_model : GraphInferenceEngineTG, dataloader: DataL
             
     print("total time :{:.5f}s, latency :{:.5f}s, decoding step: {}".format(total_time, total_time / num_decoding_steps, num_decoding_steps))
     return num_decoding_steps
-def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngineTG, draft_model: GraphInferenceEngine, dataloader: DataLoader, T=0.6, top_p=0.9, draft_top_p=1.1, budget=32, w=4, decay=0.85, negative=False, static=False, max_length=512):
+def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngineTG, draft_model: GraphInferenceEngine, dataloader: DataLoader, T=0.6, top_p=0.9, draft_top_p=1.1, budget=32, w=4, decay=0.85, negative=False, static=False, max_length=512, residual_graph=None):
     num_eval_steps = len(dataloader)
     num_decoding_steps = 0
     num_large_model_steps = 0
@@ -172,7 +173,8 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngi
                                         draft_model_engine=draft_model, target_model_engine=target_model, max_length=max_length, grow_map=grow_map,
                                         attn_mask = attn_mask, sequence = sequence, new_tokens_buffer = new_tokens_buffer, 
                                         parents_buffer = parents_buffer, 
-                                        position_ids = position_ids)
+                                        position_ids = position_ids,
+                                        residual_graph = residual_graph)
             while input_ids.shape[1] < 256 and terminate == False:
                 torch.cuda.synchronize()
                 t1 = time.time()
@@ -226,6 +228,9 @@ else:
     target_model = GraphInferenceEngineTG(max_length=args.M, model_name_or_path = args.target, dtype = torch.float16, device="cuda:0", offloading=args.offloading)
     graph_capture_list = list(range(1, 129))
     draft_model.initialize_cuda_graph(graph_capture_list)
+    residual_graph = cuda_graph_for_residual()
+
+
 
 accelerator = Accelerator()
 dataloader = accelerator.prepare(dataloader)
@@ -233,8 +238,8 @@ dataloader = accelerator.prepare(dataloader)
 #warm up functions:
 
 if args.Mode == 'benchmark':
-    simulation_greedy_with_tree_fast_benchmark(target_model=target_model, draft_model=draft_model, dataloader=dataloader, T=args.T, top_p=args.P, budget=args.B, draft_top_p=args.DP, w=args.W, negative=args.negative, decay=args.decay, static=args.static, max_length=args.M)
+    simulation_greedy_with_tree_fast_benchmark(target_model=target_model, draft_model=draft_model, dataloader=dataloader, T=args.T, top_p=args.P, budget=args.B, draft_top_p=args.DP, w=args.W, negative=args.negative, decay=args.decay, static=args.static, max_length=args.M, residual_graph = residual_graph)
 elif args.Mode == 'baseline':
     simulation_baseline(target_model=target_model, dataloader=dataloader, T=args.T, top_p=args.P)
 elif args.Mode == 'greedy':
-    simulation_greedy_with_tree_fast(target_model=target_model, draft_model=draft_model, dataloader=dataloader, T=args.T, top_p=args.P, budget=args.B, draft_top_p=args.DP, w=args.W, negative=args.negative, decay=args.decay, static=args.static, max_length=args.M)
+    simulation_greedy_with_tree_fast(target_model=target_model, draft_model=draft_model, dataloader=dataloader, T=args.T, top_p=args.P, budget=args.B, draft_top_p=args.DP, w=args.W, negative=args.negative, decay=args.decay, static=args.static, max_length=args.M, residual_graph = residual_graph)
