@@ -100,7 +100,7 @@ def simulation_baseline(target_model : GraphInferenceEngineTG, dataloader: DataL
     num_eval_steps = len(dataloader)
     num_decoding_steps = 0
     total_time = 0.0
-    with torch.inference_mode():
+    with torch.no_grad():
         for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
             input_ids = batch['input_ids'][..., :128]
             labels = batch['labels'][..., :128]

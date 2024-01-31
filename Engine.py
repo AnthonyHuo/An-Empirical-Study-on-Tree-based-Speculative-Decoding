@@ -81,7 +81,7 @@ class InferenceEngineTG:
 
         self.kv_cache = KV_Cache(config=self.model_config, max_length=max_length, device=device, dtype=dtype)
     
-    @torch.inference_mode()
+    @torch.no_grad()
     def model_run(self, 
             input_ids: torch.LongTensor, 
             storage_ids :torch.LongTensor,
@@ -267,7 +267,7 @@ class GraphInferenceEngineTG:
     def set_kv_len(self, kv_len :int):
         self.engine.set_kv_len(kv_len)
     
-    @torch.inference_mode()
+    @torch.no_grad()
     def inference(self,
             input_ids: torch.LongTensor, 
             storage_ids :torch.LongTensor,

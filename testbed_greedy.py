@@ -21,7 +21,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--model', type=str, help='model')
 parser.add_argument('--target', type=str, help='target model')
 parser.add_argument('--dataset', type=str, default="dataset/c4_small.json", help='dataset path')
-parser.add_argument('--growmap', type=str, default="growmaps/68m_7b-64.pt", help='dataset path')
+parser.add_argument('--growmap', type=str, default="growmaps/68m_7b-greedy.pt", help='dataset path')
 parser.add_argument('--start', type=int, default=0, help='start')
 parser.add_argument('--end', type=int, default=200, help='end')
 parser.add_argument('--T', type=float, default=0.6, help='temperature')
@@ -99,7 +99,7 @@ def simulation_baseline(target_model : GraphInferenceEngineTG, dataloader: DataL
     num_eval_steps = len(dataloader)
     num_decoding_steps = 0
     total_time = 0.0
-    with torch.inference_mode():
+    with torch.no_grad():
         for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
             input_ids = batch['input_ids'][..., :128]
             labels = batch['labels'][..., :128]
@@ -124,10 +124,8 @@ def simulation_baseline(target_model : GraphInferenceEngineTG, dataloader: DataL
                                                     position_ids = position_ids[..., start_length + inner_decoding_step-1 : start_length + inner_decoding_step], 
                                                     attn_mask=attn_mask[start_length + inner_decoding_step-1 : start_length + inner_decoding_step, :start_length + inner_decoding_step][None, None, :, :])[0][-1]
                 
-                logits = get_sampling_logits(logits=logits, top_p=top_p, T=T)
                 
-                p = softmax(logits / T, dim=-1)
-                new_token = p.multinomial(num_samples=1).unsqueeze(0)
+                new_token = logits.argmax(dim=-1).reshape(1,1)
                 input_ids = new_token
                 num_decoding_steps += 1
                 inner_decoding_step += 1
