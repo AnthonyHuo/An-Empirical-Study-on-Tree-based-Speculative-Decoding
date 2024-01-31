@@ -14,7 +14,7 @@ from GreedyTree import GreedyTree
 from Llama import LlamaForCausalLM_Attn
 import time
 from time import sleep
-from utils import get_sampling_logits, _make_causal_mask, get_residual, cuda_graph_for_residual, cuda_graph_for_sampling_without_replacement
+from utils import get_sampling_logits, _make_causal_mask, get_residual, cuda_graph_for_residual, cuda_graph_for_sampling_without_replacement, cuda_graph_for_sampling_argmax
 import json
 from Engine import GraphInferenceEngine, GraphInferenceEngineTG
 parser = argparse.ArgumentParser()
@@ -73,6 +73,7 @@ def simulation_greedy_with_tree_fast(target_model : GraphInferenceEngineTG, draf
                                     parents_buffer = parents_buffer, 
                                     position_ids = position_ids,
                                     residual_graph = residual_graph,
+                                    sampling_callables=sampling_callables,
                                     sample_gather_indices = sample_gather_indices)
             torch.cuda.synchronize()
             t1 = time.time()
@@ -176,6 +177,7 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngi
                                         parents_buffer = parents_buffer, 
                                         position_ids = position_ids,
                                         residual_graph = residual_graph,
+                                        sampling_callables=sampling_callables,
                                         sample_gather_indices = sample_gather_indices)
             while input_ids.shape[1] < 256 and terminate == False:
                 torch.cuda.synchronize()
@@ -248,7 +250,7 @@ else:
     for i in range(draft_step - 1):
         idx_len = len(idx_lists[i])
         num_samples = max(branch_lists[i])
-        sampling_callables[i] = cuda_graph_for_sampling_without_replacement(
+        sampling_callables[i] = cuda_graph_for_sampling_argmax(
             max_length=args.M, idx_len=idx_len, num_samples=num_samples,
             temperature=args.T, tree_size=tree_size) 
     for i in range(draft_step - 1):

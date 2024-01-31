@@ -19,6 +19,11 @@ def sampling_without_replacement(
         position = (rand.log()/sampling_q).topk(k=num_samples).indices.flatten()
         return position
 
+def sampling_argmax(
+        sampling_logits: torch.Tensor, 
+        num_samples: int):
+        return sampling_logits.topk(k=num_samples).indices.flatten()
+
 def parallel_copy(
           dst_buffer: torch.LongTensor,
           source : torch.LongTensor,
@@ -165,6 +170,40 @@ def cuda_graph_for_sampling_without_replacement(
     def run(draft_logits, rand_vector):
         static_sampling_logits.copy_(draft_logits)
         static_rand.copy_(rand_vector)
+        graph.replay()
+        return static_position.clone()
+    
+    return run
+
+def cuda_graph_for_sampling_argmax(
+                device="cuda:0", dtype=torch.float16, 
+                dim=32000, max_length=384, 
+                n_warmups=3, mempool=None,
+                idx_len = 8, num_samples = 16,
+                temperature = 0.6, tree_size = 64):
+    
+    static_sampling_logits = torch.full((idx_len, dim), 1, dtype=dtype, device=device)
+    
+
+    s = torch.cuda.Stream()
+    s.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(s):
+        for _ in range(n_warmups):
+            static_position = sampling_argmax(
+                 static_sampling_logits,
+                 num_samples
+            )
+        s.synchronize()
+    torch.cuda.current_stream().wait_stream(s)
+
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph, pool=mempool):
+        static_position = sampling_argmax(
+                 static_sampling_logits,
+                 num_samples
+            )
+    def run(draft_logits):
+        static_sampling_logits.copy_(draft_logits)
         graph.replay()
         return static_position.clone()
     

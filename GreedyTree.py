@@ -32,6 +32,7 @@ class GreedyTree(Tree):
                  parents_buffer = None, 
                  position_ids = None,
                  residual_graph = None,
+                 sampling_callables = None,
                  sample_gather_indices = None) -> None:
         super().__init__(device=device, max_length=max_length)
         assert self.max_length == draft_model_engine.engine.max_length
@@ -43,6 +44,7 @@ class GreedyTree(Tree):
         self.top_p = top_p
         self.residual_graph = residual_graph
         self.grow_map = grow_map
+        self.sampling_callables = sampling_callables
         self.sample_gather_indices = sample_gather_indices
         self.draft_step = len(self.grow_map["roots"])
         self.grow_map_roots_gpu = []
@@ -106,9 +108,10 @@ class GreedyTree(Tree):
         if benchmark:
                 torch.cuda.synchronize()
                 t1 = time.time()
-        sampling_logits = self.draft_logits[idx_list]
+        #sampling_logits = self.draft_logits[idx_list]
             
-        new_tokens_set = sampling_logits.topk(k=max_branch).indices.flatten()
+        # new_tokens_set = sampling_logits.topk(k=max_branch).indices.flatten()
+        new_tokens_set = self.sampling_callables[grow_step](self.draft_logits[idx_list])
         # finished_tokens = 0
             
         # for i in range(len(idx_list)):
