@@ -6,10 +6,10 @@ import deepspeed
 from torch.profiler import profile, record_function, ProfilerActivity
 #from Llama import LlamaForCausalLM_Attn
 parser = argparse.ArgumentParser()
-parser.add_argument('--model', type=str, default="TheBloke/Llama-2-70B-AWQ",help='model')
+parser.add_argument('--model', type=str, default="meta-llama/Llama-2-7b-hf",help='model')
 parser.add_argument('--T', type=int, default=100, help='repeat times')
 parser.add_argument('--B', type=int, default=1, help='batch size')
-parser.add_argument('--P', type=int, default=128, help='prefix length')
+parser.add_argument('--P', type=int, default=192, help='prefix length')
 
 parser.add_argument('--M', type=int, default=256, help='max length')
 parser.add_argument('--D', type=int, default=8, help='dec length')
@@ -26,7 +26,7 @@ draft_model = LlamaForCausalLM.from_pretrained(args.model, torch_dtype=torch.flo
 T = args.T
 B = args.B
 P = args.P
-LEN = [1,2,4,8,16,32,64,128,192,224,256]
+LEN = [1,2,4,8,16,32,64,128]
 prefix = torch.randint(low=3, high=30000, size=(B, P)).cuda()
 past_key_values = draft_model(input_ids = prefix, use_cache=True).past_key_values
 

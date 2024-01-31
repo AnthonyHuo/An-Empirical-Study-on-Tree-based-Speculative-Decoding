@@ -11,7 +11,7 @@ import deepspeed
 from Engine import GraphInferenceEngine, GraphInferenceEngineTG
 from torch.profiler import profile, record_function, ProfilerActivity
 from utils import get_sampling_logits, make_tree_attention_mask, select_kv, ChildrenAccept, get_residual, cat_kv, _make_causal_mask
-class SpecTree(Tree):
+class GreedyTree(Tree):
     def __init__(self, 
                  #draft_model :LlamaForCausalLM_Attn, 
                  draft_model_engine :GraphInferenceEngine,
@@ -32,7 +32,6 @@ class SpecTree(Tree):
                  parents_buffer = None, 
                  position_ids = None,
                  residual_graph = None,
-                 sampling_callables = None,
                  sample_gather_indices = None) -> None:
         super().__init__(device=device, max_length=max_length)
         assert self.max_length == draft_model_engine.engine.max_length
@@ -44,7 +43,6 @@ class SpecTree(Tree):
         self.top_p = top_p
         self.residual_graph = residual_graph
         self.grow_map = grow_map
-        self.sampling_callables = sampling_callables
         self.sample_gather_indices = sample_gather_indices
         self.draft_step = len(self.grow_map["roots"])
         self.grow_map_roots_gpu = []
@@ -62,13 +60,11 @@ class SpecTree(Tree):
 
         self.full_attn_mask[self.max_length - self.tree_size + 1: self.max_length, self.max_length - self.tree_size + 1: self.max_length] = tree_mask[1:, 1:]
 
-        # self.attn_mask[len(prefix) : len(prefix) + self.tree_size - 1, : len(prefix)] = 0.0
-        # self.attn_mask[len(prefix) : len(prefix) + self.tree_size - 1, len(prefix) : len(prefix) + self.tree_size - 1] = tree_mask[1:, 1:]
 
         total_nodes = len(prefix) + self.tree_size - 1
         self.attn_mask = self.full_attn_mask[self.max_length - total_nodes: 2 * self.max_length - total_nodes, self.max_length - total_nodes: 2 * self.max_length - total_nodes]
         self.ground_truth_len = len(prefix)
-        self.r = torch.rand(len(position_ids), dtype=self.dtype).to(self.device)
+        
         
         self.position_ids[len(prefix) : len(prefix) + self.tree_size - 1] = (self.grow_map["depth"][1:].to(self.device) + len(prefix) - 1)
         self.storage_ids = torch.arange(self.max_length).to(self.device)
@@ -91,12 +87,11 @@ class SpecTree(Tree):
         self.draft_kv_len = self.num_nodes
         
         self.target_kv_len = target_kv_len
-        
-        self.rand = torch.empty((self.tree_size, self.draft_logits.shape[1]), dtype=self.dtype).uniform_().to(self.device)
+    
         self.seq_to_use = list(range(self.max_length))
     
     @torch.inference_mode()
-    def collective_grow_static(self, idx_list :list[int], n_branch_list :list[int], benchmark=False, grow_step = None):
+    def collective_grow_static(self, idx_list, n_branch_list :list[int], benchmark=False, grow_step = None):
         
         if benchmark:
             x1 = 0.0
@@ -106,37 +101,27 @@ class SpecTree(Tree):
         
         
         total_branch = sum(n_branch_list)
+        max_branch = max(n_branch_list)
 
         if benchmark:
                 torch.cuda.synchronize()
                 t1 = time.time()
-
-        new_tokens_set :torch.LongTensor = self.sampling_callables[grow_step](self.draft_logits[idx_list], self.rand[idx_list])
-        # sampling_logits = self.draft_logits[idx_list]
-        
-        # sampling_q = softmax(sampling_logits / self.temperature, dim=-1)
-        
+        sampling_logits = self.draft_logits[idx_list]
             
-        #new_tokens_set = sampling_q.multinomial(num_samples=max_branch, replacement=False)
-        #new_tokens_set  = (self.rand[idx_list].log()/sampling_q).topk(k=max_branch).indices
-        
-        
-        #new_tokens_set = new_tokens_set.flatten()
-        self.tokens[self.num_nodes: self.num_nodes + total_branch] = new_tokens_set[self.sample_gather_indices[grow_step]]
+        new_tokens_set = sampling_logits.topk(k=max_branch).indices.flatten()
         # finished_tokens = 0
-        if benchmark:
-                    torch.cuda.synchronize()
-                    t2 = time.time()
-                    x1 += (t2 - t1)
+            
         # for i in range(len(idx_list)):
         #         n_branch = n_branch_list[i]
         #         self.tokens[self.num_nodes + finished_tokens: self.num_nodes + finished_tokens + n_branch]  = new_tokens_set[i][:n_branch]
         #         finished_tokens += n_branch
+        self.tokens[self.num_nodes: self.num_nodes + total_branch] = new_tokens_set[self.sample_gather_indices[grow_step]]
             
-        
+        if benchmark:
+                    torch.cuda.synchronize()
+                    t2 = time.time()
+                    x1 += (t2 - t1)
         self.num_nodes = self.num_nodes + total_branch
-        
-
         
         start_pos = self.num_nodes - total_branch
         end_pos = self.num_nodes
@@ -151,8 +136,6 @@ class SpecTree(Tree):
             
         )
         self.draft_kv_len = self.num_nodes
-        #print(self.draft_logits.shape, draft_model_outputs[0][-total_branch:].shape, start_pos, end_pos)
-        #self.draft_logits = torch.cat([self.draft_logits, draft_model_outputs[0][-total_branch:]], dim=0)
         self.draft_logits[start_pos - self.ground_truth_len + 1:end_pos - self.ground_truth_len + 1] = draft_model_outputs[0][-total_branch:]
         if benchmark:
                     torch.cuda.synchronize()
@@ -164,32 +147,19 @@ class SpecTree(Tree):
     @torch.inference_mode()
     def accept_step(self, parent_id :int) ->ChildrenAccept:
         logits_id = parent_id - (self.ground_truth_len - 1)
-        p = self.target_logits[logits_id]
-        draft_logits = self.draft_logits[logits_id]
         
+        target_token = self.target_token[logits_id]
         children = self.Successors[logits_id]
-
-        # target_token = p.argmax(dim=-1)
         if len(children) == 0:
-            return (-1, p)
+            return -1
         
         for pos in children:
 
             token = self.tokens[pos + (self.ground_truth_len - 1)]
-            q = softmax(draft_logits / self.temperature, dim=-1)
-            r = self.r[pos + (self.ground_truth_len - 1)]
-            
-            # if token == target_token:
-            
-            #      return (pos + (self.ground_truth_len - 1), None)
-            
-            if p[token] >= r * q[token]:
-                #return ChildrenAccept(accept_mark=0, token=token, position=pos + (self.ground_truth_len - 1), successor_order=idx)
-                return (pos + (self.ground_truth_len - 1), None)
-            else:
-                p = self.residual_graph(p, q)
-                draft_logits[token] = torch.finfo(self.dtype).min
-        return (-1, p)
+            if token == target_token:
+                return pos + (self.ground_truth_len - 1)
+        
+        return -1
 
 
         
@@ -200,7 +170,7 @@ class SpecTree(Tree):
             start_pos = 0
             end_pos = self.num_nodes
             attn_mask = self.attn_mask[start_pos: end_pos, :end_pos]
-            attn_mask = attn_mask[None, None, :, :].type(self.target_model_engine.dtype)
+            attn_mask = attn_mask[None, None, :, :]
             if benchmark:
                 torch.cuda.synchronize()
                 t1 = time.time()
@@ -216,7 +186,7 @@ class SpecTree(Tree):
             start_pos = self.target_kv_len
             end_pos = self.num_nodes
             attn_mask = self.attn_mask[start_pos: end_pos, :end_pos]
-            attn_mask = attn_mask[None, None, :, :].type(self.target_model_engine.dtype)
+            attn_mask = attn_mask[None, None, :, :]
             if benchmark:
                 torch.cuda.synchronize()
                 t1 = time.time()
@@ -228,42 +198,31 @@ class SpecTree(Tree):
                 t2 = time.time()
             self.target_logits :torch.FloatTensor = target_model_outputs[0][-(new_node_num):]
         
-        assert len(self.target_logits) == (self.num_nodes - self.ground_truth_len + 1)
 
-        self.target_logits = get_sampling_logits(logits=self.target_logits, top_p=self.top_p, T=self.temperature, replicate=False)
-        
-        self.target_logits = softmax(self.target_logits / self.temperature, dim=-1)
+        self.target_token = self.target_logits.argmax(dim=-1)
         
         accept_list = self.seq_to_use[:self.ground_truth_len]
         
         terminal = False
         while True:
             parent_id = accept_list[-1]
-            pos, res = self.accept_step(parent_id=parent_id)
+            pos = self.accept_step(parent_id=parent_id)
             if pos != -1:
                 accept_list.append(pos)
                 if self.tokens[pos] == 0 or self.tokens[pos] == 2:
                      terminal = True
                      break
             else:
-                residual = res
                 break
         if benchmark:
             torch.cuda.synchronize()
             t3 = time.time()
         accept_length = len(accept_list)
-        if not terminal:
-            if torch.isnan(residual).any():
-                 terminal = True
-            else:
-                self.tokens[accept_length] = residual.multinomial(num_samples=1, replacement=True)
-
         self.tokens[:accept_length] = self.tokens[accept_list]
-
-        self.draft_model_engine.engine.kv_cache.gather_kv_incremental(accept_list[self.ground_truth_len:], self.ground_truth_len)
-        self.target_model_engine.engine.kv_cache.gather_kv_incremental(accept_list[self.ground_truth_len:], self.ground_truth_len)
-
         if not terminal:
+            self.tokens[accept_length] = self.target_token[accept_list[-1] - self.ground_truth_len + 1].reshape(1)
+            self.draft_model_engine.engine.kv_cache.gather_kv_incremental(accept_list[self.ground_truth_len:], self.ground_truth_len)
+            self.target_model_engine.engine.kv_cache.gather_kv_incremental(accept_list[self.ground_truth_len:], self.ground_truth_len)
             if benchmark:
                 torch.cuda.synchronize()
                 t4 = time.time()
@@ -271,6 +230,7 @@ class SpecTree(Tree):
                 return self.tokens[:accept_length+1], accept_length, accept_length, t2 - t1, t3-t2, t4 - t3, terminal
             self.prepare_for_next_iter(accept_list, self.tokens[:accept_length+1])
             return self.tokens[:accept_length+1], accept_length, accept_length, terminal
+            
         else:
              if benchmark:
                 torch.cuda.synchronize()
@@ -329,7 +289,7 @@ class SpecTree(Tree):
         
 
 
-class SpecTreeTest(Tree):
+class GreedyTreeTest(Tree):
     def __init__(self, 
                  draft_model_engine :GraphInferenceEngine,
                  target_model_engine :GraphInferenceEngineTG,

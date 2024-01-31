@@ -10,7 +10,7 @@ from accelerate import Accelerator
 import argparse
 from data_converter import convert_dataset
 import argparse
-from SpecTree import SpecTree
+from GreedyTree import GreedyTree
 from Llama import LlamaForCausalLM_Attn
 import time
 from time import sleep
@@ -65,7 +65,7 @@ def simulation_greedy_with_tree_fast(target_model : GraphInferenceEngineTG, draf
             draft_kv_len = 0
             target_kv_len = 0
             attn_mask.fill_(torch.finfo(dtype).min)
-            spectree = SpecTree(prefix=input_ids.squeeze(0), device='cuda:0', temperature=T,
+            spectree = GreedyTree(prefix=input_ids.squeeze(0), device='cuda:0', temperature=T,
                                     top_p=top_p,
                                     draft_kv_len=draft_kv_len, target_kv_len=target_kv_len,
                                     draft_model_engine=draft_model, target_model_engine=target_model, max_length=max_length, grow_map=grow_map,
@@ -73,7 +73,6 @@ def simulation_greedy_with_tree_fast(target_model : GraphInferenceEngineTG, draf
                                     parents_buffer = parents_buffer, 
                                     position_ids = position_ids,
                                     residual_graph = residual_graph,
-                                    sampling_callables=sampling_callables,
                                     sample_gather_indices = sample_gather_indices)
             torch.cuda.synchronize()
             t1 = time.time()
@@ -171,7 +170,7 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngi
             draft_kv_len = 0
             target_kv_len = 0
             attn_mask.fill_(torch.finfo(dtype).min)
-            spectree = SpecTree(prefix=input_ids.squeeze(0), device='cuda:0', temperature=T,
+            spectree = GreedyTree(prefix=input_ids.squeeze(0), device='cuda:0', temperature=T,
                                         top_p=top_p, 
                                         draft_kv_len=draft_kv_len, target_kv_len=target_kv_len,
                                         draft_model_engine=draft_model, target_model_engine=target_model, max_length=max_length, grow_map=grow_map,
@@ -179,7 +178,6 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngi
                                         parents_buffer = parents_buffer, 
                                         position_ids = position_ids,
                                         residual_graph = residual_graph,
-                                        sampling_callables=sampling_callables,
                                         sample_gather_indices = sample_gather_indices)
             while input_ids.shape[1] < 256 and terminate == False:
                 torch.cuda.synchronize()

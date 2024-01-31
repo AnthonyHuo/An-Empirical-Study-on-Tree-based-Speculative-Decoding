@@ -2,13 +2,30 @@ import torch
 import dataclasses
 import math
 from copy import deepcopy
-from torch.nn.functional import relu, normalize
+from torch.nn.functional import relu, normalize, softmax
 
 def get_residual(p: torch.Tensor, q:torch.Tensor):
     residual = (p - q).relu_()
-    residual = residual / (residual.sum(dim=-1).unsqueeze(-1) + 1e-9)
+    residual = residual / (residual.sum(dim=-1).unsqueeze(-1))
     return residual
 
+def sampling_without_replacement(
+        sampling_logits: torch.Tensor, 
+        rand: torch.Tensor,  
+        num_samples: int,
+        temperature :float):
+
+        sampling_q = softmax(sampling_logits / temperature, dim=-1)
+        position = (rand.log()/sampling_q).topk(k=num_samples).indices.flatten()
+        return position
+
+def parallel_copy(
+          dst_buffer: torch.LongTensor,
+          source : torch.LongTensor,
+          offset : torch.LongTensor,
+          length : torch.LongTensor
+    ):
+     pass
 def expand_kv(kv_cache, k):
     kv_shape = kv_cache[0][0].shape
     new_kv_cache = ()
@@ -109,6 +126,47 @@ def cuda_graph_for_residual(device="cuda:0", dtype=torch.float16, dim=32000, n_w
         static_q.copy_(q)
         graph.replay()
         return static_residual.clone()
+    
+    return run
+
+def cuda_graph_for_sampling_without_replacement(
+                device="cuda:0", dtype=torch.float16, 
+                dim=32000, max_length=384, 
+                n_warmups=3, mempool=None,
+                idx_len = 8, num_samples = 16,
+                temperature = 0.6, tree_size = 64):
+    
+    static_sampling_logits = torch.full((idx_len, dim), 1, dtype=dtype, device=device)
+    static_rand = torch.empty((idx_len, dim), dtype=dtype, device=device).uniform_()
+
+    
+
+    s = torch.cuda.Stream()
+    s.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(s):
+        for _ in range(n_warmups):
+            static_position = sampling_without_replacement(
+                 static_sampling_logits,
+                 static_rand,
+                 num_samples,
+                 temperature
+            )
+        s.synchronize()
+    torch.cuda.current_stream().wait_stream(s)
+
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph, pool=mempool):
+        static_position = sampling_without_replacement(
+                 static_sampling_logits,
+                 static_rand,
+                 num_samples,
+                 temperature
+            )
+    def run(draft_logits, rand_vector):
+        static_sampling_logits.copy_(draft_logits)
+        static_rand.copy_(rand_vector)
+        graph.replay()
+        return static_position.clone()
     
     return run
     

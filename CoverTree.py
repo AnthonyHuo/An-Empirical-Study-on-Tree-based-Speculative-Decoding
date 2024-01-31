@@ -113,8 +113,7 @@ class CoverTree(Tree):
         
         self.num_nodes = self.num_nodes + total_branch
         
-
-        
+        print(self.tokens[self.num_nodes - total_branch: self.num_nodes])
         start_pos = self.num_nodes - total_branch
         end_pos = self.num_nodes
         attn_mask = self.attn_mask[self.num_nodes - total_branch: self.num_nodes]
@@ -201,34 +200,43 @@ class CoverTree(Tree):
         self.target_logits = get_sampling_logits(logits=self.target_logits, top_p=self.top_p, T=self.temperature, replicate=False)
         self.target_logits = softmax(self.target_logits / self.temperature, dim=-1)
         
-        self.target_token = self.target_logits.multinomial(num_samples=1, replacement=True)
+        self.target_token = self.target_logits.argmax(dim=-1)
         
         accept_list = list(range(self.ground_truth_len))
-        
+        terminal = False
         while True:
             parent_id = accept_list[-1]
             children_accept = self.accept_step(parent_id=parent_id)
             if children_accept.accept_mark == 0:
                 accept_list.append(children_accept.position)
+                if self.tokens[children_accept.position] == 0 or self.tokens[children_accept.position] == 2:
+                     terminal = True
+                     break
             else:
                 break
         if benchmark:
             torch.cuda.synchronize()
             t3 = time.time()
-        last_token = self.target_token[accept_list[-1] - self.ground_truth_len + 1]
-
         accept_tokens = self.tokens[accept_list]
-        valid_tokens = torch.cat([accept_tokens, last_token], dim=-1)
+        if not terminal:
+            last_token = self.target_token[accept_list[-1] - self.ground_truth_len + 1].reshape(1)
+            valid_tokens = torch.cat([accept_tokens, last_token], dim=-1)
         
-        self.draft_model_engine.gather_kv(accept_list)
-        self.target_model_engine.gather_kv(accept_list)
+            self.draft_model_engine.gather_kv(accept_list)
+            self.target_model_engine.gather_kv(accept_list)
 
-        self.prepare_for_next_iter(accept_list, valid_tokens)
-        if benchmark:
-            torch.cuda.synchronize()
-            t4 = time.time()
-            return valid_tokens, len(accept_list), len(accept_list), t2 - t1, t3-t2, t4-t3
-        return valid_tokens, len(accept_list), len(accept_list)
+            self.prepare_for_next_iter(accept_list, valid_tokens)
+            if benchmark:
+                torch.cuda.synchronize()
+                t4 = time.time()
+                return valid_tokens, len(accept_list), len(accept_list), t2 - t1, t3-t2, t4-t3, terminal
+            return valid_tokens, len(accept_list), len(accept_list), terminal
+        else:
+            if benchmark:
+                torch.cuda.synchronize()
+                t4 = time.time()
+                return accept_tokens, len(accept_list), len(accept_list), t2 - t1, t3-t2, t4-t3, terminal
+            return accept_tokens, len(accept_list), len(accept_list), terminal
     def verbose(self):
         super().verbose()
     
@@ -433,10 +441,10 @@ class CoverTreeTest(Tree):
         assert len(self.draft_logits) == (self.num_nodes - self.ground_truth_len + 1)
         assert len(self.target_logits) == (self.num_nodes - self.ground_truth_len + 1)
         
-        self.target_logits = get_sampling_logits(logits=self.target_logits, top_p=self.top_p, T=self.temperature, replicate=False)
-        self.target_logits = softmax(self.target_logits / self.temperature, dim=-1)
+        # self.target_logits = get_sampling_logits(logits=self.target_logits, top_p=self.top_p, T=self.temperature, replicate=False)
+        # self.target_logits = softmax(self.target_logits / self.temperature, dim=-1)
         
-        self.target_token = self.target_logits.multinomial(num_samples=1, replacement=True)
+        self.target_token = self.target_logits.argmax(dim=-1)
         
         accept_list = list(range(self.ground_truth_len))
         b = -1
@@ -449,7 +457,7 @@ class CoverTreeTest(Tree):
             else:
                 break
         
-        last_token = self.target_token[accept_list[-1] - self.ground_truth_len + 1]
+        last_token = self.target_token[accept_list[-1] - self.ground_truth_len + 1].reshape(1)
 
         accept_tokens = self.tokens[accept_list]
         valid_tokens = torch.cat([accept_tokens, last_token], dim=-1)

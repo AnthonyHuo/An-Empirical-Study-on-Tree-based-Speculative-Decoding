@@ -226,10 +226,11 @@ class LlamaAttention_TG(nn.Module):
             assert position_ids.shape[1] == q_len
             assert position_ids.shape[0] == bsz
 
-
+        
         query_states :torch.Tensor= self.q_proj(hidden_states)
         key_states :torch.Tensor= self.k_proj(hidden_states)
         value_states :torch.Tensor= self.v_proj(hidden_states)
+        
 
         query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
         key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
@@ -251,8 +252,9 @@ class LlamaAttention_TG(nn.Module):
         
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
-
+        
         attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
+        
         
         if attn_weights.size() != (bsz, self.num_heads, q_len, kv_len):
             raise ValueError(
@@ -280,7 +282,6 @@ class LlamaAttention_TG(nn.Module):
         attn_output = attn_output.transpose(1, 2).contiguous()
         attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)
         attn_output = self.o_proj(attn_output)
-        
         return attn_output
 class LlamaMLP_FI(nn.Module):
     def __init__(self, config:LlamaConfig):
@@ -428,12 +429,15 @@ class LlamaDecoderLayer_TG(nn.Module):
             kv_cache=kv_cache,
             debug=debug
         )
+        
         hidden_states = residual + hidden_states
-
+        
         # Fully Connected
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
+        
         hidden_states = self.mlp(hidden_states)
+        
         hidden_states = residual + hidden_states
-
+        
         return hidden_states

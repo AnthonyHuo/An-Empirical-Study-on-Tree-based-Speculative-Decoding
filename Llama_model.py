@@ -128,7 +128,6 @@ class LlamaModel_TG(LlamaPreTrainedModel):
                     debug=debug
                 )
             hidden_states = layer_outputs
-            
         hidden_states = self.norm(hidden_states)
        
         return hidden_states

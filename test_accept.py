@@ -74,14 +74,14 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngi
                                     position_ids = position_ids, max_width=w)
                 
                 
-                valid_tokens, draft_kv_len, target_kv_len,  b = spectree.verify(benchmark=True)
+                valid_tokens, draft_kv_len, target_kv_len,  b, terminate = spectree.verify(benchmark=True)
                 branch_prob[b] += 1
                 
                 
                 num_decoding_steps += (valid_tokens.shape[0] - input_ids.shape[1])
                 num_large_model_steps += 1
                 input_ids = valid_tokens.unsqueeze(0)
-                if input_ids[0][-1] == 2: terminate = True
+                if (input_ids[0] == 2)._is_any_true() or (input_ids[0] == 0)._is_any_true(): terminate = True
                 
             draft_model.clear_kv()
             target_model.clear_kv()
@@ -132,7 +132,7 @@ def simulation_greedy_with_tree_fast_benchmark_cover(target_model : GraphInferen
                 num_decoding_steps += (valid_tokens.shape[0] - input_ids.shape[1])
                 num_large_model_steps += 1
                 input_ids = valid_tokens.unsqueeze(0)
-                if input_ids[0][-1] == 2: terminate = True
+                if (input_ids[0] == 2)._is_any_true() or (input_ids[0] == 0)._is_any_true(): terminate = True
                 
             draft_model.clear_kv()
             target_model.clear_kv()

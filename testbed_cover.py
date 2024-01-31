@@ -175,7 +175,7 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngi
                 small_model_compute += b
                 torch.cuda.synchronize()
                 t3 = time.time()
-                valid_tokens, draft_kv_len, target_kv_len, x, y, z = spectree.verify(benchmark=True)
+                valid_tokens, draft_kv_len, target_kv_len, x, y, z, terminate = spectree.verify(benchmark=True)
                 large_model_run += x
                 accept_loop += y
                 kv_select += z
@@ -184,7 +184,8 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngi
                 num_decoding_steps += (valid_tokens.shape[0] - input_ids.shape[1])
                 num_large_model_steps += 1
                 input_ids = valid_tokens.unsqueeze(0)
-                if input_ids[0][-1] == 2: terminate = True
+                if (input_ids[0] == 2)._is_any_true() or (input_ids[0] == 0)._is_any_true() or input_ids.shape[1] >= 256:
+                    terminate = True
                 initialize_time += (t2 - t1)
                 speculate_time += (t3 - t2)
                 verify_time += (t4 - t3)
