@@ -32,6 +32,12 @@ def is_power_of_two(number):
   return (number > 0) and ((number & (number - 1)) == 0)
 
 
+def get_alphas(df, draft, metric, temp=0.6, top_p=1.0, target_only=True):
+  df_p = df[(df['Draft'] == draft) & (df['Temp'] == temp) & (df['Top-p'] == top_p) & (df['Metric name'] == metric)]
+  alphas = np.array([0] + df_p['Metric value'].tolist())
+  return alphas
+
+
 #### PLOTTING FUNCTIONS ####
 def legend():
   plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
@@ -99,10 +105,10 @@ def run_dp_limit_branch_depth(alphas, max_branch_width=32, max_budget=10**6, max
   return np.array(exp_lengths)
 
 
-def baselines(alphas, max_k, max_budget, max_branch_width=32):
+def baselines(alphas, max_budget, max_branch_width):
   n = np.arange(1, max_budget + 1)[np.newaxis, :]
-  k = np.arange(1, max_k + 1)[:, np.newaxis]
-  p = alphas[1:max_k + 1, np.newaxis]
+  k = np.arange(1, max_branch_width + 1)[:, np.newaxis]
+  p = alphas[1:max_branch_width + 1, np.newaxis]
   
   ### Expected accepted length of independent chains.
   p1 = p[0, 0]
@@ -126,7 +132,10 @@ def baselines(alphas, max_k, max_budget, max_branch_width=32):
   # We start indexing from a binary tree (k=2).
   k2 = k[1:]
   p2 = p[1:]
-  k_tree = (1 - p2 ** (1 + np.floor(np.log(n)/np.log(k2)))) / (1 - p2)
+  # k_tree = (1 - p2 ** (1 + np.floor(np.log(n)/np.log(k2)))) / (1 - p2)
+  # We delete the np.floor for it to be smoother.
+  k_tree = (1 - p2 ** (1 + np.log(n)/np.log(k2))) / (1 - p2)
+
   # best_k_tree = np.max(k_tree, axis=0)
   # Note that 
   return single_chain, independent_chains, k_tree
