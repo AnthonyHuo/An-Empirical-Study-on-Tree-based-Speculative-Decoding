@@ -1,7 +1,11 @@
 import torch
-m = 4
-l = 4
-b = 1
+
+k = 8
+s = 4
+
+m = k * s + 1
+l = s + 1
+b = k
 positions = [0]
 states = [(m,l,b)]
 active = [True]
@@ -31,7 +35,9 @@ while True:
             Successors.extend([[] for _ in range(z)])
             parents.extend([i for _ in range(z)])
             depth.extend([depth[i] + 1 for _ in range(z)])
-            if x >= 3 and y >= 3:
+            if z > 1:
+                states.extend([(s, s, 1) for _ in range(z)])
+            elif x >= 3 and y >= 3:
                 states.extend([(x-1, y-1, z) for _ in range(z)])
             else:
                 states.extend([(x-1, y-1, 0) for _ in range(z)])
@@ -41,6 +47,8 @@ while True:
     expand_lists.append(expand)
     expand_branches.append(expand_branch)
     active.extend([True for _ in range(sum(expand_branch))])
+    print(expand_lists)
+    print(expand_branches)
 
 
 assert num_nodes == m
@@ -55,7 +63,6 @@ grow_map = {
     "size": num_nodes
 }
 
-path = "./growmaps/4-chain.pt"
-print(parents)
-print(expand_lists)
+path = "./growmaps/8x4-tree.pt"
+
 torch.save(grow_map, path)
