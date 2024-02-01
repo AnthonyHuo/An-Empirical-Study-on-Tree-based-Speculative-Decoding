@@ -4,8 +4,8 @@ from Llama_utils import _make_causal_mask
 import time
 import argparse
 parser = argparse.ArgumentParser()
-parser.add_argument('--model', type=str, default="meta-llama/Llama-2-7b-hf", help='model')
-parser.add_argument('--T', type=int, default=100, help='time')
+parser.add_argument('--model', type=str, default="meta-llama/Llama-2-70b-hf", help='model')
+parser.add_argument('--T', type=int, default=10, help='time')
 parser.add_argument('--M', type=int, default=384, help='max length')
 parser.add_argument('--P', type=int, default=192, help='prefix length')
 parser.add_argument('--D', type=int, default=128, help='dec length')

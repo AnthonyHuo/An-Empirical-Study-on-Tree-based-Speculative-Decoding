@@ -13,7 +13,7 @@ max_branch = p.shape[0] - 1
 
 max_depth = 15
 
-max_budget = 128
+max_budget = 16
 
 T = torch.zeros((max_budget + 1, max_depth + 1, max_branch + 1)).fill_(-torch.inf)
 T_max = torch.zeros((max_budget + 1, max_depth + 1))
@@ -67,7 +67,7 @@ target_verify_time = [
                     ]
 
 
-valid_budget = [1, 2, 4, 8, 16, 32, 64, 72, 80, 128]
+valid_budget = [16]
 
 dec_time = torch.inf
 pairs = None
@@ -136,7 +136,7 @@ grow_map = {
     "size": num_nodes
 }
 
-path = "./growmaps/68m_7b-greedy.pt"
+path = "./growmaps/68m_7b-16.pt"
 
 torch.save(grow_map, path)
 

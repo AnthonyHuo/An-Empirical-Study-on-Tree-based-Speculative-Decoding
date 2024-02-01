@@ -132,7 +132,8 @@ def simulation_baseline(target_model : GraphInferenceEngineTG, dataloader: DataL
                 input_ids = new_token
                 num_decoding_steps += 1
                 inner_decoding_step += 1
-                if input_ids[0][-1] == 2: terminate = True
+                if input_ids[0][-1] == 2: 
+                    terminate = True
             torch.cuda.synchronize()
             t2 = time.time()
             total_time += (t2 - t1)

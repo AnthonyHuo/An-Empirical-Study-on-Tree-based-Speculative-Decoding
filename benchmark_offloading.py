@@ -1,5 +1,6 @@
 import torch
 from transformers import LlamaForCausalLM
+from accelerate import init_empty_weights, load_checkpoint_and_dispatch, infer_auto_device_map
 import argparse
 import time
 import accelerate
@@ -15,16 +16,17 @@ print(args)
 
 #target_model = LlamaForCausalLM_Attn.from_pretrained(args.target, torch_dtype=torch.float16, device_map="auto")
 draft_model = LlamaForCausalLM.from_pretrained(args.model, torch_dtype=torch.float16)
-draft_model = accelerate.cpu_offload(draft_model, execution_device="cuda:0")
+#draft_model = accelerate.cpu_offload(draft_model, execution_device="cuda:0", offload_buffers=True)
+device_map = infer_auto_device_map(draft_model, max_memory={0: 35 * (1 << 30), "cpu": 120 * (1 << 30)}, dtype=torch.float16)
 
-
+draft_model = accelerate.dispatch_model(draft_model, main_device="cuda:0", device_map=device_map)
 # draft_model = deepspeed.init_inference(draft_model,  
 #                 dtype=torch.float16, enable_cuda_graph=True)
 with torch.no_grad():
     T = args.T
     B = args.B
     P = args.P
-    LEN = [1, 64, 128, 256, 512, 768, 1024, 1536, 2048, 2560, 3120, 4096]
+    LEN = [1, 64, 128, 256, 512, 768, 1024]
     prefix = torch.randint(low=3, high=30000, size=(B, P)).cuda()
     past_key_values = draft_model(input_ids = prefix, use_cache=True).past_key_values
 

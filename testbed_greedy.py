@@ -242,6 +242,7 @@ else:
     grow_map = torch.load(path)
 
     tree_size = grow_map["size"]
+    print(tree_size)
     idx_lists = grow_map["roots"]
     branch_lists = grow_map['branches']
     draft_step = len(grow_map["roots"])
