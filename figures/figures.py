@@ -107,7 +107,7 @@ def baselines(alphas, max_k, max_budget, max_branch_width=32):
   ### Expected accepted length of independent chains.
   p1 = p[0, 0]
   single_chain = ((1 - p1 ** (1 + n)) / (1 - p1)).squeeze()
-  independent_chains = np.max(1 + p * (1 - p1 ** (1 + np.floor((n - 1) / k))) / (1 - p1), axis=0)
+  independent_chains = np.max(1 + p * (1 - p1 ** (np.floor(n / k))) / (1 - p1), axis=0)
   
   # # Single chain (Max-branch depth=0)
   # exp_lengths_md0 = run_dp_limit_branch_depth(
