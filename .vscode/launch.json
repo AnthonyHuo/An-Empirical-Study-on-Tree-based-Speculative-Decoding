@@ -1,0 +1,140 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debug with CUDA: test_accept.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test_accept.py",
+            "console": "integratedTerminal",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "4"
+            },
+            "breakOnLoad": true,
+            "args": [
+                "--model", "JackFram/llama-68m",
+                "--target", "meta-llama/Llama-2-7b-hf",
+                "--T", "0.6",
+                "--P", "1.0",
+                "--B", "10",
+                "--DP", "0.99",
+                "--W", "32",
+                "--start", "0",
+                "--end", "200",
+                "--ALG", "cover",
+                "--M", "560"
+            ]
+        },
+        {
+            "name": "Python Debug with CUDA: test_specinfer.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test_specinfer.py",
+            "console": "integratedTerminal",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "4"
+            },
+            "breakOnLoad": true,
+            "args": [
+                "--model", "JackFram/llama-68m",
+                "--target", "meta-llama/Llama-2-7b-hf",
+                "--T", "0.6",
+                "--P", "1.0",
+                "--B", "10",
+                "--DP", "0.99",
+                "--W", "32",
+                "--M", "560",
+            ]
+        },
+        {
+            "name": "CUDA Debug with Parameters: testbed.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/testbed.py",
+            "console": "integratedTerminal",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "4"
+            },
+            "args": [
+                "--model", "JackFram/llama-68m",
+                "--target", "meta-llama/Llama-2-7b-hf",
+                "--T", "0.6",
+                "--P", "1.0",
+                "--start", "0",
+                "--end", "100",
+                "--Mode", "greedy",
+                "--M", "1024",
+                "--growmap", "/home/zhuominc/Sequoia_mingxiaohuo/growmaps/A100-OpenWebText-68m-7b-stochastic.pt",
+                "--offloading",
+                "--dataset", "openwebtext"
+            ]
+        },
+        {
+            "name": "CUDA Debug with Parameters: testgreedyS.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test_greedyS.py",
+            "console": "integratedTerminal",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "2"
+            },
+            "args": [
+                "--model", "JackFram/llama-68m",
+                "--target", "meta-llama/Llama-2-7b-hf",
+                "--T", "0.6",
+                "--P", "1.0",
+                "--start", "0",
+                "--end", "100",
+                "--Mode", "greedy",
+                "--M", "1024",
+                "--growmap", "/home/zhuominc/Sequoia_mingxiaohuo/growmaps/A100-OpenWebText-68m-7b-stochastic.pt",
+                "--offloading",
+                "--dataset", "openwebtext"
+            ]
+        },
+        {
+            "name": "CUDA Debug with Parameters: testgreedyS_dy.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test_greedyS_dy.py",
+            "console": "integratedTerminal",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "1"
+            },
+            "args": [
+                "--model", "JackFram/llama-68m",
+                "--target", "meta-llama/Llama-2-7b-hf",
+                "--T", "0.6",
+                "--P", "0.9",
+                "--start", "0",
+                "--end", "100",
+                "--Mode", "greedy",
+                "--M", "1024",
+                "--growmap", "/home/zhuominc/Sequoia_mingxiaohuo/growmaps/A100-OpenWebText-68m-7b-stochastic.pt",
+                "--offloading",
+                "--dataset", "cnn"
+            ]
+        },
+        {
+            "name": "CUDA Debug with Parameters: dynamic_tree_test.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/dynamic_tree_test.py",
+            "console": "integratedTerminal",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "2"
+            }
+        },
+        {
+            "name": "CUDA Debug with Parameters: pretrain.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/pretrain_draft_model.py",
+            "console": "integratedTerminal",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "1"
+            }
+        }
+
+    ]
+}

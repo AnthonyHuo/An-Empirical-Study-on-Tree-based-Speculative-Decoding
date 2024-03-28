@@ -10,7 +10,7 @@ from accelerate import Accelerator
 import argparse
 from data_converter import convert_dataset
 import argparse
-from GreedySTree import GreedySTree
+from GreedySTree_dy import GreedySTree
 from Llama import LlamaForCausalLM_Attn
 import time
 from time import sleep
@@ -78,8 +78,8 @@ def simulation_greedy_with_tree_fast(target_model : GraphInferenceEngineTG, draf
             torch.cuda.synchronize()
             t1 = time.time()
             while input_ids.shape[1] < 256 and terminate == False:
-                spectree.construct_grow_map()
-                # spectree.construct_dynamic_tree()
+                # spectree.construct_grow_map()
+                spectree.construct_dynamic_tree()
                 valid_tokens, draft_kv_len, target_kv_len, terminate = spectree.verify()
                 
                 num_decoding_steps += (valid_tokens.shape[0] - input_ids.shape[1])

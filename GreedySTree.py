@@ -148,6 +148,60 @@ class GreedySTree(Tree):
             return n_branch_list, x1, x2
         return n_branch_list
     @torch.inference_mode()
+    def collective_grow_dynamic(self, idx_list, n_branch_list :list[int], benchmark=False, grow_step = None):
+        
+        if benchmark:
+            x1 = 0.0
+            x2 = 0.0
+        
+        
+        
+        total_branch = sum(n_branch_list)
+        max_branch = max(n_branch_list)
+
+        if benchmark:
+                torch.cuda.synchronize()
+                t1 = time.time()
+        #sampling_logits = self.draft_logits[idx_list]
+            
+        # new_tokens_set = sampling_logits.topk(k=max_branch).indices.flatten()
+        new_tokens_set = self.sampling_callables[grow_step](self.draft_logits[idx_list])
+        # finished_tokens = 0
+            
+        # for i in range(len(idx_list)):
+        #         n_branch = n_branch_list[i]
+        #         self.tokens[self.num_nodes + finished_tokens: self.num_nodes + finished_tokens + n_branch]  = new_tokens_set[i][:n_branch]
+        #         finished_tokens += n_branch
+        self.tokens[self.num_nodes: self.num_nodes + total_branch] = new_tokens_set[self.sample_gather_indices[grow_step]]
+            
+        if benchmark:
+                    torch.cuda.synchronize()
+                    t2 = time.time()
+                    x1 += (t2 - t1)
+        self.num_nodes = self.num_nodes + total_branch
+        
+        start_pos = self.num_nodes - total_branch
+        end_pos = self.num_nodes
+        attn_mask = self.attn_mask[self.num_nodes - total_branch: self.num_nodes]
+        attn_mask = attn_mask[None, None, :, :]
+        
+        draft_model_outputs = self.draft_model_engine.graph_inference(
+            input_ids = self.tokens[self.draft_kv_len: self.num_nodes].unsqueeze(0),
+            position_ids = self.position_ids[start_pos : end_pos].unsqueeze(0),
+            attn_mask = attn_mask,
+            storage_ids=self.storage_ids[self.draft_kv_len: self.num_nodes]
+            
+        )
+        self.draft_kv_len = self.num_nodes
+        self.draft_logits[start_pos - self.ground_truth_len + 1:end_pos - self.ground_truth_len + 1] = draft_model_outputs[0][-total_branch:]
+        if benchmark:
+                    torch.cuda.synchronize()
+                    t3 = time.time()
+                    x2 += (t3 - t2)
+        if benchmark:
+            return n_branch_list, x1, x2
+        return n_branch_list
+    @torch.inference_mode()
     def accept_step(self, parent_id :int) ->ChildrenAccept:
         logits_id = parent_id - (self.ground_truth_len - 1)
         
@@ -258,7 +312,21 @@ class GreedySTree(Tree):
             return sample_time, compute_time
         else:
             return None
-    
+    def construct_dynamic_tree(self, benchmark = False):
+        if benchmark:
+            sample_time = 0
+            compute_time = 0
+        for i in range(self.draft_step - 1):
+                if benchmark:
+                        _, t1, t2 = self.collective_grow_static(self.grow_map_roots_gpu[i], self.grow_map['branches'][i], benchmark=benchmark, grow_step=i)
+                        sample_time += t1
+                        compute_time += t2   
+                else:
+                        self.collective_grow_dynamic(self.grow_map_roots_gpu[i], self.grow_map['branches'][i],grow_step=i)
+        if benchmark:
+            return sample_time, compute_time
+        else:
+            return None
     def prepare_for_next_iter(self, accept_list: list[int], valid_tokens :torch.LongTensor):
         if len(accept_list) + 1 > self.max_target_seq:
               return 

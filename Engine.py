@@ -39,8 +39,8 @@ class InferenceEngine:
                     max_length=self.max_length, storage_ids=storage_ids,
                     attention_mask=attention_mask, position_ids=position_ids,
                     kv_cache=self.kv_cache, debug=debug)
-
-        return logits
+        log_probs = torch.nn.functional.log_softmax(logits, dim=-1)
+        return log_probs
     
     def clear_kv(self):
         self.kv_cache.clear()
@@ -74,7 +74,7 @@ class InferenceEngineTG:
             self.model = LlamaForCausalLM_TG.from_pretrained(model_name_or_path, torch_dtype=dtype)
             self.model.eval()
             device_map = accelerate.infer_auto_device_map(self.model, max_memory={0: 35 * (1 << 30), "cpu": 120 * (1 << 30)}, dtype=torch.float16)
-            self.model = accelerate.dispatch_model(self.model, main_device="cuda:0", device_map=device_map)
+            self.model = accelerate.dispatch_model(self.model, main_device="cuda:2", device_map=device_map)
         else:
             self.model = LlamaForCausalLM_TG.from_pretrained(model_name_or_path, torch_dtype=dtype, device_map=device)
             self.model.eval()
