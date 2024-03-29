@@ -237,7 +237,10 @@ class GreedySTree(Tree):
         self.seq_to_use = list(range(self.max_length))
     def update_tree_with_logits(self, logits, parent_nodes, grow_step):
         """Update the tree dynamically with new tokens and logits."""
-        new_tokens_values, new_tokens_set = logits.topk(k=127)
+        if grow_step !=0:
+            new_tokens_values, new_tokens_set = logits.topk(k=31)
+        else:
+            new_tokens_values, new_tokens_set = logits.topk(k=127)
         i=0
         if grow_step !=0:
             parent_nodes = parent_nodes[1:]

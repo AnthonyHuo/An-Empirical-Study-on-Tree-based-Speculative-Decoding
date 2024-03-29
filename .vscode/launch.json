@@ -32,7 +32,7 @@
             "program": "${workspaceFolder}/test_specinfer.py",
             "console": "integratedTerminal",
             "env": {
-                "CUDA_VISIBLE_DEVICES": "4"
+                "CUDA_VISIBLE_DEVICES": "6"
             },
             "breakOnLoad": true,
             "args": [
@@ -53,7 +53,7 @@
             "program": "${workspaceFolder}/testbed.py",
             "console": "integratedTerminal",
             "env": {
-                "CUDA_VISIBLE_DEVICES": "4"
+                "CUDA_VISIBLE_DEVICES": "6"
             },
             "args": [
                 "--model", "JackFram/llama-68m",
@@ -76,7 +76,7 @@
             "program": "${workspaceFolder}/test_greedyS.py",
             "console": "integratedTerminal",
             "env": {
-                "CUDA_VISIBLE_DEVICES": "2"
+                "CUDA_VISIBLE_DEVICES": "6"
             },
             "args": [
                 "--model", "JackFram/llama-68m",
@@ -84,7 +84,7 @@
                 "--T", "0.6",
                 "--P", "1.0",
                 "--start", "0",
-                "--end", "100",
+                "--end", "20",
                 "--Mode", "greedy",
                 "--M", "1024",
                 "--growmap", "/home/zhuominc/Sequoia_mingxiaohuo/growmaps/A100-OpenWebText-68m-7b-stochastic.pt",
@@ -99,7 +99,7 @@
             "program": "${workspaceFolder}/test_greedyS_dy.py",
             "console": "integratedTerminal",
             "env": {
-                "CUDA_VISIBLE_DEVICES": "1"
+                "CUDA_VISIBLE_DEVICES": "6"
             },
             "args": [
                 "--model", "JackFram/llama-68m",
@@ -107,12 +107,12 @@
                 "--T", "0.6",
                 "--P", "0.9",
                 "--start", "0",
-                "--end", "100",
+                "--end", "10",
                 "--Mode", "greedy",
                 "--M", "1024",
                 "--growmap", "/home/zhuominc/Sequoia_mingxiaohuo/growmaps/A100-OpenWebText-68m-7b-stochastic.pt",
                 "--offloading",
-                "--dataset", "cnn"
+                "--dataset", "openwebtext"
             ]
         },
         {
@@ -122,7 +122,7 @@
             "program": "${workspaceFolder}/dynamic_tree_test.py",
             "console": "integratedTerminal",
             "env": {
-                "CUDA_VISIBLE_DEVICES": "2"
+                "CUDA_VISIBLE_DEVICES": "6"
             }
         },
         {
@@ -132,7 +132,7 @@
             "program": "${workspaceFolder}/pretrain_draft_model.py",
             "console": "integratedTerminal",
             "env": {
-                "CUDA_VISIBLE_DEVICES": "1"
+                "CUDA_VISIBLE_DEVICES": "6"
             }
         }
 

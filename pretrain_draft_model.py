@@ -6,10 +6,13 @@ from transformers import AutoTokenizer, AutoConfig, LlamaForCausalLM, LlamaConfi
 import transformers
 from datasets import load_dataset,load_from_disk
 from data_converter import convert_dataset
+import wandb
 
+wandb.init(project="llm_speculative_decoding")
 tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf", use_fast=False)
 tokenizer.pad_token = tokenizer.eos_token
 data = load_from_disk("/home/zhuominc/data/c4_train")
+
 
 model_config = LlamaConfig(
         vocab_size=tokenizer.vocab_size,
@@ -27,13 +30,14 @@ trainer = transformers.Trainer(
     model=model, 
     train_dataset=data,
     args=transformers.TrainingArguments(
-        per_device_train_batch_size=4, 
-        gradient_accumulation_steps=4,
-        warmup_steps=100, 
-        max_steps=200, 
+        per_device_train_batch_size=64, 
+        gradient_accumulation_steps=64,
+        warmup_steps=10000, 
+        max_steps=20000, 
         learning_rate=2e-4, 
         fp16=True,
         logging_steps=1, 
+        report_to="wandb",
         output_dir='/home/zhuominc/Sequoia_mingxiaohuo/outputs/'
     ),
     data_collator=transformers.DataCollatorForLanguageModeling(tokenizer, mlm=False)
