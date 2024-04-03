@@ -28,9 +28,12 @@ class TreeNode:
         # else: 
         node = self
         cumulative_logit = 0
+        weight = self.depth*(-0.1)+1
         while node:
+            cumulative_logit += (node.logit*weight)
             cumulative_logit += node.logit
             node = node.parent
+            weight+=0.1
         return cumulative_logit
 
     def add_child(self, child):
@@ -247,9 +250,10 @@ class GreedySTree(Tree):
         for parent_node in parent_nodes:
             new_token_value = new_tokens_values[i]
             new_token_set = new_tokens_set[i]
-            for value, logit in zip(new_token_set, new_token_value):
-                child = TreeNode(logit=logit.item(), value=value.item(), parent=parent_node, depth=parent_node.depth + 1, updated=False)
-                parent_node.add_child(child)
+            if parent_node.updated == False:
+                for value, logit in zip(new_token_set, new_token_value):
+                    child = TreeNode(logit=logit.item(), value=value.item(), parent=parent_node, depth=parent_node.depth + 1, updated=False)
+                    parent_node.add_child(child)
                 parent_node.updated = True
             i+=1
         prune_tree(self.root, keep=127)  # Assuming root is defined and accessible
