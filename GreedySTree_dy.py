@@ -28,12 +28,12 @@ class TreeNode:
         # else: 
         node = self
         cumulative_logit = 0
-        weight = self.depth*(-0.1)+1
+        weight = self.depth*(-0.09)+1
         while node:
             cumulative_logit += (node.logit*weight)
-            cumulative_logit += node.logit
+            # cumulative_logit += node.logit
             node = node.parent
-            weight+=0.1
+            weight+=0.09
         return cumulative_logit
 
     def add_child(self, child):
@@ -194,7 +194,7 @@ class GreedySTree(Tree):
         self.grow_map = grow_map
         self.sampling_callables = sampling_callables
         self.sample_gather_indices = sample_gather_indices
-        self.draft_step = len(self.grow_map["roots"])
+        self.draft_step = 6
         self.grow_map_roots_gpu = []
         for x in self.grow_map["roots"]:
              self.grow_map_roots_gpu.append(torch.Tensor(x).to(self.device).long())
