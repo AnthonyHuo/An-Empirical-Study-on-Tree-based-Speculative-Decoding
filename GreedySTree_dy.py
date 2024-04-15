@@ -130,34 +130,34 @@ def prune_tree(root, keep=127):
     keep_nodes.add(root)
 
     bfs_prune_tree(root, keep_nodes)
-def generate_mask_for_pruned_tree(root):
-    # Step 1: Collect all nodes using BFS, assuming the tree is already pruned to 128 nodes.
-    all_nodes = get_all_nodes(root)
-    all_nodes = all_nodes[1:]
-    node_to_index = {node: index for index, node in enumerate(all_nodes)}
-    # Step 2: Create a mapping of node to index.
-    # node_to_index = {node: index for index, node in enumerate(all_nodes)}
+# def generate_mask_for_pruned_tree(root):
+#     # Step 1: Collect all nodes using BFS, assuming the tree is already pruned to 128 nodes.
+#     all_nodes = get_all_nodes(root)
+#     all_nodes = all_nodes[1:]
+#     node_to_index = {node: index for index, node in enumerate(all_nodes)}
+#     # Step 2: Create a mapping of node to index.
+#     # node_to_index = {node: index for index, node in enumerate(all_nodes)}
     
-    # Step 3: Initialize the mask with zeros.
-    mask = [[0 for _ in range(127)] for _ in range(127)]
+#     # Step 3: Initialize the mask with zeros.
+#     mask = [[0 for _ in range(127)] for _ in range(127)]
     
-    # Step 4: Populate the mask.
-    for node in all_nodes:
-        current_index = node_to_index[node]
-        # Set the node's own position in the mask to 1.
-        mask[current_index][current_index] = 1
+#     # Step 4: Populate the mask.
+#     for node in all_nodes:
+#         current_index = node_to_index[node]
+#         # Set the node's own position in the mask to 1.
+#         mask[current_index][current_index] = 1
         
-        # Traverse up to the root to set ancestor relations.
-        current_node = node.parent
-        while current_node.value is not None:
-            parent_index = node_to_index[current_node]
-            mask[current_index][parent_index] = 1  # Mark the ancestor's relation to this node.
-            current_node = current_node.parent
+#         # Traverse up to the root to set ancestor relations.
+#         current_node = node.parent
+#         while current_node.value is not None:
+#             parent_index = node_to_index[current_node]
+#             mask[current_index][parent_index] = 1  # Mark the ancestor's relation to this node.
+#             current_node = current_node.parent
     
-    # Convert mask to a tensor
-    mask_tensor = torch.tensor(mask, dtype=torch.int)
+#     # Convert mask to a tensor
+#     mask_tensor = torch.tensor(mask, dtype=torch.int)
     
-    return mask_tensor
+#     return mask_tensor
 class GreedySTree(Tree):
     def __init__(self, 
                  #draft_model :LlamaForCausalLM_Attn, 
@@ -194,7 +194,7 @@ class GreedySTree(Tree):
         self.grow_map = grow_map
         self.sampling_callables = sampling_callables
         self.sample_gather_indices = sample_gather_indices
-        self.draft_step = 6
+        self.draft_step = 7
         self.grow_map_roots_gpu = []
         for x in self.grow_map["roots"]:
              self.grow_map_roots_gpu.append(torch.Tensor(x).to(self.device).long())
@@ -238,6 +238,34 @@ class GreedySTree(Tree):
         
         self.target_kv_len = target_kv_len
         self.seq_to_use = list(range(self.max_length))
+    def generate_mask_for_pruned_tree(self,root):
+        # Step 1: Collect all nodes using BFS, assuming the tree is already pruned to 128 nodes.
+        all_nodes = get_all_nodes(root)
+        all_nodes = all_nodes[1:]
+        node_to_index = {node: index for index, node in enumerate(all_nodes)}
+        # Step 2: Create a mapping of node to index.
+        # node_to_index = {node: index for index, node in enumerate(all_nodes)}
+        
+        # Step 3: Initialize the mask with zeros.
+        mask = [[0 for _ in range(127)] for _ in range(127)]
+        
+        # Step 4: Populate the mask.
+        for node in all_nodes:
+            current_index = node_to_index[node]
+            # Set the node's own position in the mask to 1.
+            mask[current_index][current_index] = 1
+            
+            # Traverse up to the root to set ancestor relations.
+            current_node = node.parent
+            while current_node.value is not None:
+                parent_index = node_to_index[current_node]
+                mask[current_index][parent_index] = 1  # Mark the ancestor's relation to this node.
+                current_node = current_node.parent
+        
+        # Convert mask to a tensor
+        mask_tensor = torch.tensor(mask, dtype=torch.int)
+        
+        return mask_tensor
     def update_tree_with_logits(self, logits, parent_nodes, grow_step):
         """Update the tree dynamically with new tokens and logits."""
         if grow_step !=0:
@@ -284,7 +312,7 @@ class GreedySTree(Tree):
         
         position_ids = torch.tensor(get_all_nodes_depth(self.root)[1:])+self.num_nodes-1
         attn_mask = self.attn_mask[self.num_nodes: self.num_nodes+127]
-        tree_mask = generate_mask_for_pruned_tree(self.root)
+        tree_mask = self.generate_mask_for_pruned_tree(self.root)
         tree_mask = (tree_mask == 0).type(self.dtype)
         tree_mask.masked_fill_(tree_mask > 0, torch.finfo(self.dtype).min)
         attn_mask[0:127 , self.num_nodes:self.num_nodes+127] = tree_mask
@@ -305,7 +333,7 @@ class GreedySTree(Tree):
                     x2 += (t3 - t2)
         if benchmark:
             return x1, x2
-        return None
+        return position_ids, tree_mask
     @torch.inference_mode()
     def accept_step(self, parent_id :int) ->ChildrenAccept:
         logits_id = parent_id - (self.ground_truth_len - 1)
@@ -332,10 +360,12 @@ class GreedySTree(Tree):
             start_pos = 0
             end_pos = self.num_nodes
             attn_mask = self.attn_mask[start_pos: end_pos, :end_pos]
+            attn_mask[end_pos-127:end_pos,end_pos-127:end_pos] = self.draft_tree_mask
             attn_mask = attn_mask[None, None, :, :]
             if benchmark:
                 torch.cuda.synchronize()
                 t1 = time.time()
+            self.position_ids[end_pos-127:end_pos] = self.draft_postion_ids
             target_model_outputs = self.target_model_engine.inference(input_ids = self.tokens[start_pos : end_pos].unsqueeze(0), 
                                     position_ids = self.position_ids[start_pos : end_pos].unsqueeze(0), attn_mask = attn_mask, 
                                     storage_ids=self.storage_ids[start_pos : end_pos])
@@ -348,10 +378,12 @@ class GreedySTree(Tree):
             start_pos = self.target_kv_len
             end_pos = self.num_nodes
             attn_mask = self.attn_mask[start_pos: end_pos, :end_pos]
+            attn_mask[1:,end_pos-127:end_pos] = self.draft_tree_mask
             attn_mask = attn_mask[None, None, :, :]
             if benchmark:
                 torch.cuda.synchronize()
                 t1 = time.time()
+            self.position_ids[start_pos+1 : end_pos] = self.draft_postion_ids
             target_model_outputs = self.target_model_engine.inference(input_ids = self.tokens[start_pos : end_pos].unsqueeze(0), 
                                         position_ids =self.position_ids[start_pos : end_pos].unsqueeze(0), attn_mask = attn_mask,
                                         storage_ids=self.storage_ids[start_pos : end_pos])
@@ -412,7 +444,9 @@ class GreedySTree(Tree):
                         sample_time += t1
                         compute_time += t2   
                 else:
-                        self.collective_grow_dynamic(grow_step=i)
+                        position_ids, tree_mask = self.collective_grow_dynamic(grow_step=i)
+        self.draft_postion_ids = position_ids
+        self.draft_tree_mask = tree_mask
         self.num_nodes = self.num_nodes+127
         self.Successors = generate_successors_list(self.root)
         if benchmark:
@@ -422,7 +456,7 @@ class GreedySTree(Tree):
     def prepare_for_next_iter(self, accept_list: list[int], valid_tokens :torch.LongTensor):
         if len(accept_list) + 1 > self.max_target_seq:
               return 
-        # self.tokens[:len(valid_tokens)] = valid_tokens
+        self.tokens[:len(valid_tokens)] = valid_tokens
         self.position_ids[:len(accept_list)] =  self.position_ids[accept_list]
         self.position_ids[len(accept_list)] = len(accept_list) 
         self.position_ids[len(valid_tokens) : len(valid_tokens) + self.tree_size - 1] = (self.depth + len(valid_tokens) - 1)
