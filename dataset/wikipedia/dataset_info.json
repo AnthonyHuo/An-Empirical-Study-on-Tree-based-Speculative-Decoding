@@ -1,0 +1,261 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "20231101.en",
+  "dataset_name": "wikipedia",
+  "dataset_size": 20200062385,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00000-of-00041.parquet": {
+      "num_bytes": 420296449,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00001-of-00041.parquet": {
+      "num_bytes": 351448367,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00002-of-00041.parquet": {
+      "num_bytes": 329024669,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00003-of-00041.parquet": {
+      "num_bytes": 330779424,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00004-of-00041.parquet": {
+      "num_bytes": 306945391,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00005-of-00041.parquet": {
+      "num_bytes": 243974056,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00006-of-00041.parquet": {
+      "num_bytes": 266288728,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00007-of-00041.parquet": {
+      "num_bytes": 228195804,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00008-of-00041.parquet": {
+      "num_bytes": 247687191,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00009-of-00041.parquet": {
+      "num_bytes": 227378231,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00010-of-00041.parquet": {
+      "num_bytes": 233604795,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00011-of-00041.parquet": {
+      "num_bytes": 231748583,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00012-of-00041.parquet": {
+      "num_bytes": 239222511,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00013-of-00041.parquet": {
+      "num_bytes": 241146961,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00014-of-00041.parquet": {
+      "num_bytes": 222798405,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00015-of-00041.parquet": {
+      "num_bytes": 234578705,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00016-of-00041.parquet": {
+      "num_bytes": 503153575,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00017-of-00041.parquet": {
+      "num_bytes": 230813705,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00018-of-00041.parquet": {
+      "num_bytes": 231055386,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00019-of-00041.parquet": {
+      "num_bytes": 195276969,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00020-of-00041.parquet": {
+      "num_bytes": 225141733,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00021-of-00041.parquet": {
+      "num_bytes": 216445587,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00022-of-00041.parquet": {
+      "num_bytes": 201995404,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00023-of-00041.parquet": {
+      "num_bytes": 212615391,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00024-of-00041.parquet": {
+      "num_bytes": 220729597,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00025-of-00041.parquet": {
+      "num_bytes": 221292721,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00026-of-00041.parquet": {
+      "num_bytes": 208188233,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00027-of-00041.parquet": {
+      "num_bytes": 213980716,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00028-of-00041.parquet": {
+      "num_bytes": 188376392,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00029-of-00041.parquet": {
+      "num_bytes": 217775627,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00030-of-00041.parquet": {
+      "num_bytes": 203945186,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00031-of-00041.parquet": {
+      "num_bytes": 215470925,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00032-of-00041.parquet": {
+      "num_bytes": 214242576,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00033-of-00041.parquet": {
+      "num_bytes": 202706223,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00034-of-00041.parquet": {
+      "num_bytes": 219010799,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00035-of-00041.parquet": {
+      "num_bytes": 224459876,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00036-of-00041.parquet": {
+      "num_bytes": 610276598,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00037-of-00041.parquet": {
+      "num_bytes": 674143674,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00038-of-00041.parquet": {
+      "num_bytes": 538231796,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00039-of-00041.parquet": {
+      "num_bytes": 464851854,
+      "checksum": null
+    },
+    "hf://datasets/wikimedia/wikipedia@b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.en/train-00040-of-00041.parquet": {
+      "num_bytes": 421630218,
+      "checksum": null
+    }
+  },
+  "download_size": 11630929031,
+  "features": {
+    "id": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "url": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "title": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "input_ids": {
+      "feature": {
+        "dtype": "int32",
+        "_type": "Value"
+      },
+      "_type": "Sequence"
+    },
+    "attention_mask": {
+      "feature": {
+        "dtype": "int8",
+        "_type": "Value"
+      },
+      "_type": "Sequence"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 31830991416,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 20200062385,
+      "num_examples": 6407814,
+      "shard_lengths": [
+        110000,
+        126289,
+        146289,
+        146289,
+        146289,
+        156289,
+        186289,
+        196288,
+        186288,
+        192576,
+        206288,
+        196288,
+        186288,
+        202576,
+        166288,
+        80000,
+        202576,
+        216288,
+        206288,
+        212576,
+        216288,
+        206288,
+        212576,
+        216288,
+        232576,
+        216288,
+        216288,
+        212576,
+        216288,
+        206288,
+        116288,
+        56288,
+        70000,
+        86288,
+        90000,
+        96288,
+        110000,
+        106288,
+        56288
+      ],
+      "dataset_name": "wikipedia"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

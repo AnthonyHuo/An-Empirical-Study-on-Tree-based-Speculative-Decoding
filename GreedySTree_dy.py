@@ -107,7 +107,7 @@ def get_all_nodes_depth(root):
         queue.extend(current_node.children)  # Children are added to the end of the queue
     return all_nodes
 
-def prune_tree(root, keep=127):
+def prune_tree(root, keep=63):
     """Prune the tree to keep up to 'keep' nodes based on unique cumulative logits, prioritizing uniqueness."""
     all_nodes = get_all_nodes(root)
     # Compute cumulative logits excluding the root
@@ -194,7 +194,7 @@ class GreedySTree(Tree):
         self.grow_map = grow_map
         self.sampling_callables = sampling_callables
         self.sample_gather_indices = sample_gather_indices
-        self.draft_step = 7
+        self.draft_step = 6
         self.grow_map_roots_gpu = []
         for x in self.grow_map["roots"]:
              self.grow_map_roots_gpu.append(torch.Tensor(x).to(self.device).long())
@@ -247,7 +247,7 @@ class GreedySTree(Tree):
         # node_to_index = {node: index for index, node in enumerate(all_nodes)}
         
         # Step 3: Initialize the mask with zeros.
-        mask = [[0 for _ in range(127)] for _ in range(127)]
+        mask = [[0 for _ in range(63)] for _ in range(63)]
         
         # Step 4: Populate the mask.
         for node in all_nodes:
@@ -284,7 +284,7 @@ class GreedySTree(Tree):
                     parent_node.add_child(child)
                 parent_node.updated = True
             i+=1
-        prune_tree(self.root, keep=127)  # Assuming root is defined and accessible
+        prune_tree(self.root, keep=63)  # Assuming root is defined and accessible
     
     @torch.inference_mode()
     def collective_grow_dynamic(self, benchmark=False, grow_step = None):
@@ -299,10 +299,10 @@ class GreedySTree(Tree):
         if grow_step == 0:
            sampling_logits = self.draft_logits[0].unsqueeze(0)
         else:
-           sampling_logits = self.draft_logits[1:128]
+           sampling_logits = self.draft_logits[1:64]
         nodes = [node for node in get_all_nodes(self.root)]
         self.update_tree_with_logits(sampling_logits, nodes, grow_step)
-        self.tokens[self.num_nodes: self.num_nodes + 127] = torch.tensor(get_all_nodes_value(self.root)[1:])
+        self.tokens[self.num_nodes: self.num_nodes + 63] = torch.tensor(get_all_nodes_value(self.root)[1:])
         if benchmark:
                     torch.cuda.synchronize()
                     t2 = time.time()
@@ -311,22 +311,22 @@ class GreedySTree(Tree):
         # nodes = [node for node in get_all_nodes(self.root)]
         
         position_ids = torch.tensor(get_all_nodes_depth(self.root)[1:])+self.num_nodes-1
-        attn_mask = self.attn_mask[self.num_nodes: self.num_nodes+127]
+        attn_mask = self.attn_mask[self.num_nodes: self.num_nodes+63]
         tree_mask = self.generate_mask_for_pruned_tree(self.root)
         tree_mask = (tree_mask == 0).type(self.dtype)
         tree_mask.masked_fill_(tree_mask > 0, torch.finfo(self.dtype).min)
-        attn_mask[0:127 , self.num_nodes:self.num_nodes+127] = tree_mask
+        attn_mask[0:63 , self.num_nodes:self.num_nodes+63] = tree_mask
         attn_mask = attn_mask[None, None, :, :]
 
         draft_model_outputs = self.draft_model_engine.inference(
-            input_ids = self.tokens[self.num_nodes: self.num_nodes+127].unsqueeze(0),
+            input_ids = self.tokens[self.num_nodes: self.num_nodes+63].unsqueeze(0),
             position_ids = position_ids.unsqueeze(0),
             attn_mask = attn_mask,
-            storage_ids=self.storage_ids[self.num_nodes: self.num_nodes+127]
+            storage_ids=self.storage_ids[self.num_nodes: self.num_nodes+63]
             
         )
-        self.draft_kv_len = self.num_nodes+127
-        self.draft_logits[1:128] = draft_model_outputs[0][-127:]
+        self.draft_kv_len = self.num_nodes+63
+        self.draft_logits[1:64] = draft_model_outputs[0][-63:]
         if benchmark:
                     torch.cuda.synchronize()
                     t3 = time.time()
@@ -360,12 +360,12 @@ class GreedySTree(Tree):
             start_pos = 0
             end_pos = self.num_nodes
             attn_mask = self.attn_mask[start_pos: end_pos, :end_pos]
-            attn_mask[end_pos-127:end_pos,end_pos-127:end_pos] = self.draft_tree_mask
+            attn_mask[end_pos-63:end_pos,end_pos-63:end_pos] = self.draft_tree_mask
             attn_mask = attn_mask[None, None, :, :]
             if benchmark:
                 torch.cuda.synchronize()
                 t1 = time.time()
-            self.position_ids[end_pos-127:end_pos] = self.draft_postion_ids
+            self.position_ids[end_pos-63:end_pos] = self.draft_postion_ids
             target_model_outputs = self.target_model_engine.inference(input_ids = self.tokens[start_pos : end_pos].unsqueeze(0), 
                                     position_ids = self.position_ids[start_pos : end_pos].unsqueeze(0), attn_mask = attn_mask, 
                                     storage_ids=self.storage_ids[start_pos : end_pos])
@@ -378,7 +378,7 @@ class GreedySTree(Tree):
             start_pos = self.target_kv_len
             end_pos = self.num_nodes
             attn_mask = self.attn_mask[start_pos: end_pos, :end_pos]
-            attn_mask[1:,end_pos-127:end_pos] = self.draft_tree_mask
+            attn_mask[1:,end_pos-63:end_pos] = self.draft_tree_mask
             attn_mask = attn_mask[None, None, :, :]
             if benchmark:
                 torch.cuda.synchronize()
@@ -392,10 +392,10 @@ class GreedySTree(Tree):
                 t2 = time.time()
             self.target_logits :torch.FloatTensor = target_model_outputs[0][-(new_node_num):]
         
-        self.target_logits = get_sampling_logits(logits=self.target_logits, top_p=self.top_p, T=self.temperature, replicate=False)
-        self.target_logits = softmax(self.target_logits / self.temperature, dim=-1)
-        #self.target_token = self.target_logits.argmax(dim=-1)
-        self.target_token = self.target_logits.multinomial(num_samples=1)
+        # self.target_logits = get_sampling_logits(logits=self.target_logits, top_p=self.top_p, T=self.temperature, replicate=False)
+        # self.target_logits = softmax(self.target_logits / self.temperature, dim=-1)
+        self.target_token = self.target_logits.argmax(dim=-1)
+        # self.target_token = self.target_logits.multinomial(num_samples=1)
         accept_list = self.seq_to_use[:self.ground_truth_len]
         
         terminal = False
@@ -447,7 +447,7 @@ class GreedySTree(Tree):
                         position_ids, tree_mask = self.collective_grow_dynamic(grow_step=i)
         self.draft_postion_ids = position_ids
         self.draft_tree_mask = tree_mask
-        self.num_nodes = self.num_nodes+127
+        self.num_nodes = self.num_nodes+63
         self.Successors = generate_successors_list(self.root)
         if benchmark:
             return sample_time, compute_time

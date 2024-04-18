@@ -87,7 +87,7 @@
                 "--end", "20",
                 "--Mode", "greedy",
                 "--M", "1024",
-                "--growmap", "/home/zhuominc/Sequoia_mingxiaohuo/growmaps/A100-OpenWebText-68m-7b-stochastic.pt",
+                "--growmap", "/home/zhuominc/Sequoia_mingxiaohuo/growmaps/68m_13b-greedy.pt",
                 "--offloading",
                 "--dataset", "openwebtext"
             ]
@@ -99,19 +99,19 @@
             "program": "${workspaceFolder}/test_greedyS_dy.py",
             "console": "integratedTerminal",
             "env": {
-                "CUDA_VISIBLE_DEVICES": "6"
+                "CUDA_VISIBLE_DEVICES": "4"
             },
             "args": [
                 "--model", "JackFram/llama-68m",
                 "--target", "meta-llama/Llama-2-7b-hf",
-                "--T", "0.6",
+                "--T", "0.01",
                 "--P", "0.9",
                 "--start", "0",
                 "--end", "10",
                 "--Mode", "greedy",
                 "--M", "1024",
                 "--growmap", "/home/zhuominc/Sequoia_mingxiaohuo/growmaps/A100-OpenWebText-68m-7b-stochastic.pt",
-                "--offloading",
+                // "--offloading",
                 "--dataset", "openwebtext"
             ]
         },
