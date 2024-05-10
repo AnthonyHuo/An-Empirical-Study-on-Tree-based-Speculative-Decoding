@@ -2,10 +2,11 @@ import json
 from tqdm import tqdm
 from PIL import Image
 from transformers import AutoProcessor
-from llava_model import LlavaForConditionalGeneration
+from llava_model import LlavaForConditionalGeneration,GraphInferenceEngineTG
 from torch.nn.functional import softmax
 from transformers.cache_utils import Cache
 import torch
+from utils import get_sampling_logits, _make_causal_mask
 def prepare_inputs_for_generation(input_ids, past_key_values=None, inputs_embeds=None, pixel_values=None, attention_mask=None, **kwargs):
         if past_key_values is not None:
             if isinstance(past_key_values, Cache):
@@ -57,7 +58,8 @@ def prepare_inputs_for_generation(input_ids, past_key_values=None, inputs_embeds
         )
         return model_inputs
 # Load the model and processor
-model = LlavaForConditionalGeneration.from_pretrained("llava-hf/llava-1.5-7b-hf")
+# model = LlavaForConditionalGeneration.from_pretrained("llava-hf/llava-1.5-7b-hf")
+target_model =  GraphInferenceEngineTG(max_length=1024, model_name_or_path = "llava-hf/llava-1.5-7b-hf", dtype = torch.float16, device="cuda:0")
 processor = AutoProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
 
 # Load the JSON file
@@ -83,28 +85,43 @@ for entry in tqdm(data[:2], desc="Processing labels"):
     # output = processor.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
     # print(output)
     inputs.update( {
-    "past_key_values": None,
-    'position_ids': torch.arange(0, inputs['input_ids'].shape[1], dtype=torch.long).view(1, -1),  # Specify dtype=torch.long to avoid type issues
-    "use_cache": True,
-    "pixel_values": inputs['pixel_values'],
+    "pixel_values": inputs['pixel_values'].to('cuda:0'),
+    "input_ids": inputs['input_ids'].to('cuda:0')
     })
-    for i in range (64):
-        # if i == 0:
-        #    inputs = prepare_inputs_for_generation(**inputs)
-        output = model(**inputs)
-        output_logits = output['logits'][0][-1]
-        p = softmax(output_logits / 0.01, dim=-1)
+    position_ids = torch.arange(1024).to('cuda:0').unsqueeze(0)
+    storage_ids = torch.arange(1024).to('cuda:0')
+    attn_mask = _make_causal_mask((1024, 1024), target_model.dtype, target_model.device)
+    start_length = 0
+    inner_decoding_step = 0
+    while inner_decoding_step < 64:
+        if inner_decoding_step == 0:
+            inputs_embeds, attention_mask, position_id,storage_id = target_model.inference_image(input_ids = inputs['input_ids'], storage_ids=storage_ids[:start_length], pixel_values=inputs['pixel_values'],
+                                                    position_ids = position_ids[..., :start_length], 
+                                                    attn_mask=attn_mask[:start_length, :start_length][None, None, :, :])
+            start_length = inputs_embeds.shape[1]
+            # inputs['attn_mask'] = attn_mask[:start_length, :start_length][None, None, :, :]
+            logits = target_model.inference(input_ids = None, inputs_embeds = inputs_embeds, storage_ids=storage_ids[:start_length], pixel_values=inputs['pixel_values'],
+                                                    position_ids = position_ids[..., :start_length], 
+                                                    attn_mask=attn_mask[:start_length, :start_length][None, None, :, :])[0][-1]
+        # output_logits = output[0][-1]
+        else:
+            logits = target_model.inference(input_ids = inputs['input_ids'], inputs_embeds = None, storage_ids=storage_ids[start_length + inner_decoding_step-1 : start_length + inner_decoding_step],
+                                                    position_ids = position_ids[..., start_length + inner_decoding_step-1 : start_length + inner_decoding_step], 
+                                                    attn_mask=attn_mask[start_length + inner_decoding_step-1 : start_length + inner_decoding_step, :start_length + inner_decoding_step][None, None, :, :])[0][-1]
+        p = softmax(logits / 0.01, dim=-1)
         new_token = p.multinomial(num_samples=1).unsqueeze(0)
+        inner_decoding_step += 1
         inputs['input_ids'] = new_token
-        inputs['past_key_values']= output['past_key_values']
-        inputs['use_cache'] = True
-        # Concatenate the tensors to get a tensor of shape [1, 29]
-        inputs['attention_mask']  = torch.cat((inputs['attention_mask'], torch.ones(1, 1, dtype=torch.long)), dim=1)
-        new_position_id = inputs['position_ids'][0, -1] + 1
-        new_position_id = new_position_id.long() 
-        inputs['position_ids'] = new_position_id.unsqueeze(0).unsqueeze(0)
+        # # Concatenate the tensors to get a tensor of shape [1, 29]
+        # inputs['attn_mask']  = attn_mask[start_length + i + 1 -1 : start_length + i + 1, :start_length + i + 1][None, None, :, :]
+
+        # new_position_id = 603 + i
+        # new_position_id = torch.tensor(new_position_id).to(torch.long)
+        # inputs['position_ids'] = new_position_id.unsqueeze(0).unsqueeze(0)
+        # inputs['storage_ids'] = new_position_id.unsqueeze(0)
         output = processor.batch_decode(new_token, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         print(output)
+    target_model.clear_kv()
     # Store or display the output
     responses.append(output)
 
