@@ -34,8 +34,10 @@ To set up the environment for this project, please follow the steps below. The c
 
     Use the following commands to run various experiments with different models and datasets. Make sure to adjust the CUDA_VISIBLE_DEVICES according to your GPU availability.
 1. **Static Tree Method**
-    Command Examples
+    
     Running Greedy Speculative Decoding with JackFram/llama-68m on CNN Dataset
+    
+    Command Examples
 
     ```bash
 
@@ -53,8 +55,10 @@ To set up the environment for this project, please follow the steps below. The c
     Running Greedy Speculative Decoding with OpenWebText Dataset
 
 2. **Common-Sense Token Verfication**
-    Command Examples
+    
     Running Greedy Speculative Decoding with Common-Sense Token Verfication on CNN Dataset, it is cool let's try it! It can improve the average acceptance length from about 0.3 to 0.5
+    
+    Command Examples
 
     ```bash
 
@@ -71,9 +75,11 @@ To set up the environment for this project, please follow the steps below. The c
         --dataset cnn
 
 3. **Dynamic-Tree Algorithm**
-    Command Examples
+    
     It is faster than static tree, especially when temperature is high.
     
+    Command Examples
+
     ```bash
 
     CUDA_VISIBLE_DEVICES=7 python test_greedyS_dy.py \
@@ -89,9 +95,11 @@ To set up the environment for this project, please follow the steps below. The c
         --dataset cnn
 
 4. **Run kl Divergency test in advance**
-    Command Examples
+   
     We perform a method to test draft model potential in advance using KL Divergency.
     
+    Command Examples
+
     ```bash
 
     CUDA_VISIBLE_DEVICES=7 python test_greedyS_logit.py \
@@ -109,10 +117,12 @@ To set up the environment for this project, please follow the steps below. The c
     After running it, you can get an potential score, for the same dataset small score means a strong draft model.
 
 5. **Spec-LLava**
-    Command Examples
+   
     We perform a method to acclerate llava
      
     First, you can try our draft llava model, which very similar to llava original model, llava-160m and llava-68m, their peformance is good, can be used in some small model scenes, like robotics, driving!
+
+    Command Examples
 
     ```bash
 
