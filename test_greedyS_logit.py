@@ -164,7 +164,7 @@ def simulation_baseline(target_model : GraphInferenceEngineTG, draft_model: Grap
             total_time += (t2 - t1)
             target_model.clear_kv()
     average_kl = total_kl/num_decoding_steps
-    print(average_kl)
+    print("potential score :{:.5f}".format(average_kl))
     print("total time :{:.5f}s, latency :{:.5f}s, decoding step: {}".format(total_time, total_time / num_decoding_steps, num_decoding_steps))
     return num_decoding_steps
 def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngineTG, draft_model: GraphInferenceEngine, dataloader: DataLoader, T=0.6, top_p=0.9, 
@@ -252,8 +252,8 @@ tokenizer.pad_token = tokenizer.eos_token
 #tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 if args.dataset == 'openwebtext':
     tokenized_dataset_eval = load_from_disk("dataset/openwebtext_eval").select(list(range(args.start, args.end)))
-# if args.dataset == 'cnn':
-#     tokenized_dataset_eval = convert_cnn_dataset(tokenizer=tokenizer, seq_len = 256).select(list(range(args.start, args.end)))
+elif args.dataset == 'cnn':
+    tokenized_dataset_eval = convert_cnn_dataset(tokenizer=tokenizer, seq_len = 256).select(list(range(args.start, args.end)))
 else:
     tokenized_dataset_eval = convert_dataset(tokenizer=tokenizer,file_path=args.dataset).select(list(range(args.start, args.end)))
 
