@@ -129,6 +129,8 @@ To set up the environment for this project, please follow the steps below. The c
     processor = AutoProcessor.from_pretrained("anthonycmu/llava-1.5-160m")
     processor = AutoProcessor.from_pretrained("anthonycmu/llava-1.5-68m")
 
+    ```
+
     Next, you can run the following command to test llava acceleration. You need to first download coco test-2015 dataset, or other dataset, modify dataset path in 64 row of the code, which can acclerate vlm in a good performance!
     
     ```bash
