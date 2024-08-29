@@ -116,7 +116,7 @@ To set up the environment for this project, please follow the steps below. The c
         --dataset openwebtext
     ```
 
-    After running it, you can get an potential score, for the same dataset small score means a strong draft model.
+    After running it, you can get a potential score, for the same dataset small score means a strong draft model.
 
 5. **Spec-LLava**
    
