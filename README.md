@@ -52,7 +52,8 @@ To set up the environment for this project, please follow the steps below. The c
         --M 1024 \
         --growmap ./growmaps/68m_7b-64.pt \
         --dataset cnn
-    Running Greedy Speculative Decoding with OpenWebText Dataset
+    ```
+    Running Greedy Speculative Decoding with OpenWebText Dataset, dataset you can choose others like openwebtext
 
 2. **Common-Sense Token Verfication**
     
