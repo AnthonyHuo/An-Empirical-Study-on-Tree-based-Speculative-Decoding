@@ -114,6 +114,7 @@ To set up the environment for this project, please follow the steps below. The c
         --M 1024 \
         --growmap ./growmaps/68m_7b-64.pt \
         --dataset openwebtext
+    ```
 
     After running it, you can get an potential score, for the same dataset small score means a strong draft model.
 
