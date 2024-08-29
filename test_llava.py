@@ -2,10 +2,11 @@ import json
 from tqdm import tqdm
 from PIL import Image
 from transformers import AutoProcessor
-from llava_model import LlavaForConditionalGeneration,GraphInferenceEngineTG
+from llava_model import LlavaForConditionalGeneration,GraphInferenceEngineTG,GraphInferenceEngineFI
 from transformers import LlamaForCausalLM, LlamaTokenizer, DataCollatorForLanguageModeling, OPTForCausalLM, AutoTokenizer
 import torch
 import numpy as np 
+import os
 from datasets import load_from_disk, Dataset
 from torch.utils.data.dataloader import DataLoader
 from tqdm import tqdm
@@ -16,6 +17,8 @@ import argparse
 from data_converter import convert_dataset
 import argparse
 from GreedySTree_llava_dy import GreedySTree
+# from GreedySTree_llava_llm import GreedySTree
+# from GreedySTree_llava_seq import GreedySTree
 from Llama import LlamaForCausalLM_Attn
 import time
 from time import sleep
@@ -58,16 +61,23 @@ def simulation_greedy_with_tree_fast(target_model : GraphInferenceEngineTG, draf
     # Load the JSON file
     with open('/home/zhuominc/Sequoia_mingxiaohuo/instruct150k_subset.json', 'r') as file:
         data = json.load(file)
+    image_directory = "/home/zhuominc/Sequoia_mingxiaohuo/test2015/"
 
+    # Get a sorted list of image files in the directory
+    image_files = sorted(os.listdir(image_directory))
     with torch.no_grad():
-        for entry in tqdm(data[:200], desc="Processing labels"):
+        for i, image_file in enumerate(tqdm(image_files[1:100], desc="Processing labels")):
             # Construct the prompt
-            prompt = f"USER: {entry['conversations'][0]['value']} ASSISTANT:"
-            image_id = entry['id']  # Extract image ID
-            image_path = f"/home/zhuominc/Sequoia_mingxiaohuo/train2014/COCO_train2014_{image_id.zfill(12)}.jpg"
+            # prompt = f"USER: {entry['conversations'][0]['value']} ASSISTANT:"
+            prompt = f"USER: Can you tell me what is in the image?\n<image> ASSISTANT:"
+            # prompt_draft = entry['conversations'][1]['value']
+            # image_id = entry['id']  # Extract image ID
+            # image_path = f"/home/zhuominc/Sequoia_mingxiaohuo/test2015/COCO_test2015_{image_id.zfill(12)}.jpg"
+            image_path = os.path.join(image_directory, image_file)
             image = Image.open(image_path)
             # Process the prompt and image
             inputs = processor(text=prompt, images=image, return_tensors="pt")
+            # inputs_draft = tokenizer(prompt_draft)
             input_ids = inputs['input_ids']
             terminate = False
             if input_ids[0][-1] == -100: terminate = True
@@ -83,31 +93,49 @@ def simulation_greedy_with_tree_fast(target_model : GraphInferenceEngineTG, draf
             new_tokens_buffer =  torch.zeros(max_length).long().to('cuda:0')
             parents_buffer =  torch.zeros(max_length).long().to('cuda:0')
             position_ids = torch.zeros(max_length).long().to('cuda:0')
+            storage_ids = torch.arange(max_length).to('cuda:0')
             draft_kv_len = 0
             target_kv_len = 0
             attn_mask.fill_(torch.finfo(dtype).min)
-            spectree = GreedySTree(prefix=input_ids.squeeze(0), device='cuda:0', temperature=T,
-                                    top_p=top_p,
-                                    draft_kv_len=draft_kv_len, target_kv_len=target_kv_len,
-                                    draft_model_engine=draft_model, target_model_engine=target_model, max_length=max_length, grow_map=grow_map,
-                                    attn_mask = attn_mask, sequence = sequence, new_tokens_buffer = new_tokens_buffer, 
-                                    parents_buffer = parents_buffer, 
-                                    position_ids = position_ids,
-                                    residual_graph = residual_graph,
-                                    sampling_callables=sampling_callables,
-                                    sample_gather_indices = sample_gather_indices)
+            inputs_embeds = draft_model.inference_image(input_ids = inputs['input_ids'], pixel_values=inputs['pixel_values'])
+            # inputs_embeds1 = target_model.inference_image(input_ids = inputs['input_ids'], pixel_values=inputs['pixel_values'])
+            # start_length = inputs_embeds1.shape[1]
+            # input_logits = target_model.inference(input_ids = None, inputs_embeds = inputs_embeds1, storage_ids=storage_ids[:start_length], pixel_values=inputs['pixel_values'],
+            #                                 position_ids = position_ids[..., :start_length], 
+            #                                 attn_mask=attn_mask[:start_length, :start_length][None, None, :, :])[0][-1]
+            spectree = GreedySTree(prefix=inputs_embeds, device='cuda:0', temperature=T,
+                                        top_p=top_p, inputs_ids = inputs['input_ids'],inputs_embeds = inputs_embeds,  pixel_values=inputs['pixel_values'],
+                                        draft_kv_len=draft_kv_len, target_kv_len=target_kv_len,
+                                        draft_model_engine=draft_model, target_model_engine=target_model, max_length=max_length, grow_map=grow_map,
+                                        attn_mask = attn_mask, sequence = sequence, new_tokens_buffer = new_tokens_buffer, 
+                                        parents_buffer = parents_buffer, 
+                                        position_ids = position_ids,
+                                        residual_graph = residual_graph,
+                                        sampling_callables=sampling_callables,
+                                        sample_gather_indices = sample_gather_indices)
             torch.cuda.synchronize()
             t1 = time.time()
-            while input_ids.shape[1] < 256 and terminate == False:
+            all_tokens = []
+            # processor = AutoProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
+            while input_ids.shape[1] < 1024 and terminate == False:
                 # spectree.construct_grow_map()
                 spectree.construct_dynamic_tree()
                 valid_tokens, draft_kv_len, target_kv_len, terminate = spectree.verify()
+                #  print(valid_tokens)
+                outputs = processor.batch_decode(valid_tokens, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+                output = processor.batch_decode(valid_tokens[-1].unsqueeze(0), skip_special_tokens=True, clean_up_tokenization_spaces=False)
+                full_sentence = ' '.join(outputs)  # Join the outputs into a single sentence
+                all_tokens.append(output)
                 
-                num_decoding_steps += (valid_tokens.shape[0] - input_ids.shape[1])
+                if input_ids.shape[1]<600:
+                    num_decoding_steps += (valid_tokens.shape[0] - 597)
+                else:
+                    num_decoding_steps += (valid_tokens.shape[0] - input_ids.shape[1])
                 num_large_model_steps += 1
                 input_ids = valid_tokens.unsqueeze(0)
                 if (input_ids[0][-1] == 2) or (input_ids[0][-1] == 0): terminate = True
-            
+            print(full_sentence)
+            print(all_tokens)
             torch.cuda.synchronize()
             t2 = time.time()
             total_time += (t2 - t1)
@@ -131,13 +159,18 @@ def simulation_baseline(target_model : GraphInferenceEngineTG, T=0.6, top_p=0.9,
     # Load the JSON file
     with open('/home/zhuominc/Sequoia_mingxiaohuo/instruct150k_subset.json', 'r') as file:
         data = json.load(file)
+    image_directory = "/home/zhuominc/Sequoia_mingxiaohuo/test2015/"
 
+    # Get a sorted list of image files in the directory
+    image_files = sorted(os.listdir(image_directory))
     with torch.no_grad():
-        for entry in tqdm(data[:200], desc="Processing labels"):
+        for i, image_file in enumerate(tqdm(image_files[:100], desc="Processing labels")):
             # Construct the prompt
-            prompt = f"USER: {entry['conversations'][0]['value']} ASSISTANT:"
-            image_id = entry['id']  # Extract image ID
-            image_path = f"/home/zhuominc/Sequoia_mingxiaohuo/train2014/COCO_train2014_{image_id.zfill(12)}.jpg"
+            prompt = f"USER: Can you tell me what is in the image?\n<image> ASSISTANT:"
+            # prompt = f"USER: Can you show me the content of the image?\n<image> ASSISTANT:"
+            # image_id = entry['id']  # Extract image ID
+            # image_path = f"/home/zhuominc/Sequoia_mingxiaohuo/train2014/COCO_train2014_{image_id.zfill(12)}.jpg"
+            image_path = os.path.join(image_directory, image_file)
             image = Image.open(image_path)
 
             # Process the prompt and image
@@ -158,9 +191,7 @@ def simulation_baseline(target_model : GraphInferenceEngineTG, T=0.6, top_p=0.9,
             start_length = 0
             while inner_decoding_step < 128 and terminate == False:
                 if inner_decoding_step == 0:
-                    inputs_embeds, attention_mask, position_id,storage_id = target_model.inference_image(input_ids = inputs['input_ids'], storage_ids=storage_ids[:start_length], pixel_values=inputs['pixel_values'],
-                                                    position_ids = position_ids[..., :start_length], 
-                                                    attn_mask=attn_mask[:start_length, :start_length][None, None, :, :])
+                    inputs_embeds = target_model.inference_image(input_ids = inputs['input_ids'], pixel_values=inputs['pixel_values'])
                     start_length = inputs_embeds.shape[1]
                     logits = target_model.inference(input_ids = None, inputs_embeds = inputs_embeds, storage_ids=storage_ids[:start_length], pixel_values=inputs['pixel_values'],
                                                     position_ids = position_ids[..., :start_length], 
@@ -175,8 +206,8 @@ def simulation_baseline(target_model : GraphInferenceEngineTG, T=0.6, top_p=0.9,
                 p = softmax(logits / T, dim=-1)
                 new_token = p.multinomial(num_samples=1).unsqueeze(0)
                 inputs['input_ids'] = new_token
-                outputs = processor.batch_decode(new_token, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
-                print(outputs)
+                # outputs = processor.batch_decode(new_token, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+                # print(outputs)
                 num_decoding_steps += 1
                 inner_decoding_step += 1
                 if input_ids[0][-1] == 2: 
@@ -216,7 +247,7 @@ if args.Mode == 'baseline':
     # target_model =  LlavaForConditionalGeneration.from_pretrained("llava-hf/llava-1.5-7b-hf")
     target_model =  GraphInferenceEngineTG(max_length=args.M, model_name_or_path = args.target, dtype = torch.float16, device="cuda:0")
 else:
-    draft_model = GraphInferenceEngine(max_length=args.M, model_name_or_path = args.model, dtype = torch.float16, device="cuda:0")
+    draft_model = GraphInferenceEngineFI(max_length=args.M, model_name_or_path = args.model, dtype = torch.float16, device="cuda:0")
     # target_model = LlavaForConditionalGeneration.from_pretrained("llava-hf/llava-1.5-7b-hf")
     target_model =  GraphInferenceEngineTG(max_length=args.M, model_name_or_path = args.target, dtype = torch.float16, device="cuda:0")
     graph_capture_list = list(range(1, 129))

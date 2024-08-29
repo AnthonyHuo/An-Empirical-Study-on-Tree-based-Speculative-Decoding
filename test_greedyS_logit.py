@@ -10,10 +10,11 @@ from accelerate import Accelerator
 import argparse
 from data_converter import convert_dataset,convert_cnn_dataset
 import argparse
-# from GreedySTree_dy import GreedySTree
-from transformers import AutoProcessor
-from GreedySTree_dy_fast import GreedySTree
+import deepspeed
+import torch.nn.functional as F
+from GreedySTree_logit import GreedySTree
 from Llama import LlamaForCausalLM_Attn
+from transformers import AutoProcessor
 import time
 from time import sleep
 from utils import get_sampling_logits, _make_causal_mask, get_residual, cuda_graph_for_residual, cuda_graph_for_sampling_without_replacement, cuda_graph_for_sampling_with_replacement,cuda_graph_for_sampling_argmax 
@@ -61,11 +62,13 @@ def simulation_greedy_with_tree_fast(target_model : GraphInferenceEngineTG, draf
         #    self.indices = [int(line.strip()) for line in file.readlines()]
             probs = [float(line.strip()) for line in file.readlines()]
     probs = torch.tensor(probs, device='cuda:0')
-    probs = probs +0.5
-    probs = -(5/probs)
+    probs *= 0
     
     with torch.no_grad():
+        output_file = "output.txt"
+        file = open(output_file, "a")
         for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
+            file.write("\n")
             input_ids = batch['input_ids'][..., :128]
             labels = batch['labels'][..., :128]
             terminate = False
@@ -75,8 +78,9 @@ def simulation_greedy_with_tree_fast(target_model : GraphInferenceEngineTG, draf
             attn_mask.fill_(torch.finfo(dtype).min)
             spectree = GreedySTree(prefix=input_ids.squeeze(0), device='cuda:0', temperature=T,
                                     top_p=top_p,
+                                    # inputs_embeds = inputs_embeds,
                                     draft_kv_len=draft_kv_len, target_kv_len=target_kv_len,
-                                    draft_model_engine=draft_model, target_model_engine=target_model, max_length=max_length,probs = probs,grow_map=grow_map,
+                                    draft_model_engine=draft_model, target_model_engine=target_model, target_model_engine_1=target_model_1, max_length=max_length, probs = probs, grow_map=grow_map,
                                     attn_mask = attn_mask, sequence = sequence, new_tokens_buffer = new_tokens_buffer, 
                                     parents_buffer = parents_buffer, 
                                     position_ids = position_ids,
@@ -85,19 +89,18 @@ def simulation_greedy_with_tree_fast(target_model : GraphInferenceEngineTG, draf
                                     sample_gather_indices = sample_gather_indices)
             torch.cuda.synchronize()
             t1 = time.time()
-            # processor = AutoProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
+            processor = AutoProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
             while input_ids.shape[1] < 256 and terminate == False:
-                # spectree.construct_grow_map()
-                spectree.construct_dynamic_tree()
-                valid_tokens, draft_kv_len, target_kv_len, terminate = spectree.verify()
-                # print(valid_tokens)
-                # outputs = processor.batch_decode(valid_tokens, skip_special_tokens=True, clean_up_tokenization_spaces=False)
-                # full_sentence = ' '.join(outputs)  # Join the outputs into a single sentence
+                spectree.construct_grow_map()
+                # spectree.construct_dynamic_tree()
+                valid_tokens, draft_kv_len, target_kv_len, terminate = spectree.verify(file = file)
+                outputs = processor.batch_decode(valid_tokens, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+                full_sentence = ' '.join(outputs)  # Join the outputs into a single sentence
                 num_decoding_steps += (valid_tokens.shape[0] - input_ids.shape[1])
                 num_large_model_steps += 1
                 input_ids = valid_tokens.unsqueeze(0)
                 if (input_ids[0][-1] == 2) or (input_ids[0][-1] == 0): terminate = True
-            # print(full_sentence)
+            print(full_sentence)
             torch.cuda.synchronize()
             t2 = time.time()
             total_time += (t2 - t1)
@@ -108,14 +111,15 @@ def simulation_greedy_with_tree_fast(target_model : GraphInferenceEngineTG, draf
 
 
 
-def simulation_baseline(target_model : GraphInferenceEngineTG, dataloader: DataLoader, T=0.6, top_p=0.9, max_length=256):
+def simulation_baseline(target_model : GraphInferenceEngineTG, draft_model: GraphInferenceEngine, dataloader: DataLoader, T=0.6, top_p=0.9, max_length=1024):
     num_eval_steps = len(dataloader)
     num_decoding_steps = 0
     total_time = 0.0
+    total_kl = 0
     with torch.no_grad():
         for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
-            input_ids = batch['input_ids'][..., :128]
-            labels = batch['labels'][..., :128]
+            input_ids = batch['input_ids'][..., :256]
+            labels = batch['labels'][..., :256]
             terminate = False
             if labels[0][-1] == -100: terminate = True
             position_ids = torch.arange(max_length).to('cuda:0').unsqueeze(0)
@@ -130,8 +134,17 @@ def simulation_baseline(target_model : GraphInferenceEngineTG, dataloader: DataL
                     start_length = input_ids.shape[1]
                     logits = target_model.inference(input_ids = input_ids, storage_ids=storage_ids[:start_length],
                                                     position_ids = position_ids[..., :start_length], 
-                                                    attn_mask=attn_mask[:start_length, :start_length][None, None, :, :])[0][-1]
-                    
+                                                    attn_mask=attn_mask[:start_length, :][None, None, :, :])[0]
+                    logits_1 = draft_model.inference(input_ids = input_ids, storage_ids=storage_ids[:start_length],
+                                position_ids = position_ids[..., :start_length], 
+                                attn_mask=attn_mask[:start_length, :][None, None, :, :])[0]
+                        
+                    logits_1 = F.log_softmax(logits_1, dim=-1)
+                    logits = F.log_softmax(logits, dim=-1)
+                    kl_loss = F.kl_div(logits_1, logits.exp(), reduction='batchmean')
+                    # print(kl_loss)
+                    total_kl +=kl_loss
+                    terminate = True                    
                 else:
                     logits = target_model.inference(input_ids = input_ids, storage_ids=storage_ids[start_length + inner_decoding_step-1 : start_length + inner_decoding_step],
                                                     position_ids = position_ids[..., start_length + inner_decoding_step-1 : start_length + inner_decoding_step], 
@@ -139,9 +152,9 @@ def simulation_baseline(target_model : GraphInferenceEngineTG, dataloader: DataL
                 
                 logits = get_sampling_logits(logits=logits, top_p=top_p, T=T)
                 
-                p = softmax(logits / T, dim=-1)
-                new_token = p.multinomial(num_samples=1).unsqueeze(0)
-                input_ids = new_token
+                # p = softmax(logits / T, dim=-1)
+                # new_token = p.multinomial(num_samples=1).unsqueeze(0)
+                # input_ids = new_token
                 num_decoding_steps += 1
                 inner_decoding_step += 1
                 if input_ids[0][-1] == 2: 
@@ -150,7 +163,8 @@ def simulation_baseline(target_model : GraphInferenceEngineTG, dataloader: DataL
             t2 = time.time()
             total_time += (t2 - t1)
             target_model.clear_kv()
-            
+    average_kl = total_kl/num_decoding_steps
+    print(average_kl)
     print("total time :{:.5f}s, latency :{:.5f}s, decoding step: {}".format(total_time, total_time / num_decoding_steps, num_decoding_steps))
     return num_decoding_steps
 def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngineTG, draft_model: GraphInferenceEngine, dataloader: DataLoader, T=0.6, top_p=0.9, 
@@ -187,7 +201,7 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngi
             spectree = GreedySTree(prefix=input_ids.squeeze(0), device='cuda:0', temperature=T,
                                         top_p=top_p, 
                                         draft_kv_len=draft_kv_len, target_kv_len=target_kv_len,
-                                        draft_model_engine=draft_model, target_model_engine=target_model, max_length=max_length, grow_map=grow_map,
+                                        draft_model_engine=draft_model, target_model_engine=target_model, target_model_engine_1=target_model_1, max_length=max_length, grow_map=grow_map,
                                         attn_mask = attn_mask, sequence = sequence, new_tokens_buffer = new_tokens_buffer, 
                                         parents_buffer = parents_buffer, 
                                         position_ids = position_ids,
@@ -236,10 +250,10 @@ def simulation_greedy_with_tree_fast_benchmark(target_model : GraphInferenceEngi
 tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf", use_fast=False)
 tokenizer.pad_token = tokenizer.eos_token
 #tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-# if args.dataset == 'cnn':
-#     tokenized_dataset_eval = convert_cnn_dataset(tokenizer=tokenizer, seq_len = 256).select(list(range(args.start, args.end)))
 if args.dataset == 'openwebtext':
     tokenized_dataset_eval = load_from_disk("dataset/openwebtext_eval").select(list(range(args.start, args.end)))
+# if args.dataset == 'cnn':
+#     tokenized_dataset_eval = convert_cnn_dataset(tokenizer=tokenizer, seq_len = 256).select(list(range(args.start, args.end)))
 else:
     tokenized_dataset_eval = convert_dataset(tokenizer=tokenizer,file_path=args.dataset).select(list(range(args.start, args.end)))
 
@@ -248,12 +262,15 @@ dataloader = DataLoader(tokenized_dataset_eval, batch_size=1, collate_fn=data_co
 
 
 if args.Mode == 'baseline':
-    target_model =  GraphInferenceEngineTG(max_length=args.M, model_name_or_path = args.target, dtype = torch.float16, device="cuda:0", offloading=args.offloading)
+    target_model =  GraphInferenceEngine(max_length=args.M, model_name_or_path = args.target, dtype = torch.float16, device="cuda:0")
+    draft_model = GraphInferenceEngine(max_length=args.M, model_name_or_path = args.model, dtype = torch.float16, device="cuda:0")
 else:
     draft_model = GraphInferenceEngine(max_length=args.M, model_name_or_path = args.model, dtype = torch.float16, device="cuda:0")
     target_model = GraphInferenceEngineTG(max_length=args.M, model_name_or_path = args.target, dtype = torch.float16, device="cuda:0", offloading=args.offloading)
+    target_model_1 = GraphInferenceEngine(max_length=args.M, model_name_or_path = args.target, dtype = torch.float16, device="cuda:0")
     graph_capture_list = list(range(1, 129))
     draft_model.initialize_cuda_graph(graph_capture_list)
+    target_model_1.initialize_cuda_graph(graph_capture_list)
     residual_graph = cuda_graph_for_residual()
     path = args.growmap
     grow_map = torch.load(path)
@@ -297,7 +314,7 @@ if args.Mode == 'benchmark':
     simulation_greedy_with_tree_fast_benchmark(target_model=target_model, draft_model=draft_model, dataloader=dataloader, T=args.T, top_p=args.P, budget=args.B, draft_top_p=args.DP, w=args.W, negative=args.negative, decay=args.decay, static=args.static, 
                                                max_length=args.M, residual_graph = residual_graph, grow_map = grow_map, sampling_callables=sampling_callables, sample_gather_indices = sample_gather_indices)
 elif args.Mode == 'baseline':
-    simulation_baseline(target_model=target_model, dataloader=dataloader, T=args.T, top_p=args.P)
+    simulation_baseline(target_model=target_model, draft_model=draft_model, dataloader=dataloader, T=args.T, top_p=args.P)
 elif args.Mode == 'greedy':
     simulation_greedy_with_tree_fast(target_model=target_model, draft_model=draft_model, dataloader=dataloader, T=args.T, top_p=args.P, budget=args.B, draft_top_p=args.DP, w=args.W, negative=args.negative, decay=args.decay, static=args.static, 
                                      max_length=args.M, residual_graph = residual_graph, grow_map = grow_map, sampling_callables=sampling_callables, sample_gather_indices = sample_gather_indices)
