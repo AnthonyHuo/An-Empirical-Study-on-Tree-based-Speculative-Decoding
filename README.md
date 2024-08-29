@@ -137,8 +137,8 @@ To set up the environment for this project, please follow the steps below. The c
     ```bash
 
     CUDA_VISIBLE_DEVICES=7 python test_llava.py \
-        --model JackFram/llama-68m \
-        --target meta-llama/Llama-2-13b-hf \
+        --model anthonycmu/llava-1.5-160m\
+        --target llava-hf/llava-1.5-7b-hf\
         --T 0.6 \
         --P 0.9 \
         --start 0 \
@@ -148,3 +148,17 @@ To set up the environment for this project, please follow the steps below. The c
         --growmap ./growmaps/68m_7b-64.pt \
         --dataset openwebtext
 
+5. **Finetune or Pretrain your own Draft Model**
+   
+    Let's pretrain your own draft model:
+
+    Command Examples
+
+    ```bash
+
+    python pretrain_draft_model.py 
+
+    ```
+
+    Next, you can use your own draft model by direct use its local path like './outputs/checkpoint-500/' or push it to huggingface.
+    
