@@ -144,7 +144,7 @@ To set up the environment for this project, please follow the steps below. The c
         --P 0.9 \
         --start 0 \
         --end 3500 \
-        --Mode baseline \
+        --Mode greedy \
         --M 1024 \
         --growmap ./growmaps/68m_7b-64.pt \
         --dataset openwebtext
